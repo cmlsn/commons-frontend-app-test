@@ -68,6 +68,77 @@ const DatalayerJupyterShell = dynamic(
   { ssr: false },
 );
 
+const Feature = ({ icon, title, children }) => (
+  <div className="flex items-start gap-3">
+    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+      {icon}
+    </div>
+    <div>
+      <h3 className="font-semibold text-slate-800">{title}</h3>
+      <p className="mt-1 text-sm text-slate-600">{children}</p>
+    </div>
+  </div>
+);
+
+const JupyterInfoPanel = () => {
+  return (
+    <div className="mx-auto max-w-4xl p-8">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          Welcome to Your Secure Gen3 Workspace
+        </h2>
+        <p className="mt-3 max-w-2xl mx-auto text-lg text-slate-600">
+          A powerful, secure, and cost-effective environment for bioinformatics and research.
+        </p>
+      </div>
+
+      <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 01.75.75v.51a4.5 4.5 0 014.235 4.432l.015.058.015.057V10a2 2 0 01-1.995 1.995L13 12H7a2 2 0 01-2-2V7.75a4.5 4.5 0 014.492-4.492L10 3.25a.75.75 0 01.75-.75zM10 5a2.5 2.5 0 00-2.5 2.5V9h5V7.5A2.5 2.5 0 0010 5z" /></svg>}
+          title="Pay-per-use & Cost-Efficient"
+        >
+          Your workspace only consumes resources when you're actively running computations. Kernels automatically shut down when idle, ensuring you only pay for what you use.
+        </Feature>
+
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>}
+          title="FEDRAMP-level Security"
+        >
+          Built with stringent security controls, including encrypted data transport and strict exfiltration policies to protect sensitive HIPPA and CUI data.
+        </Feature>
+
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 8a3 3 0 100-6 3 3 0 000 6zM14.5 8a3 3 0 100-6 3 3 0 000 6zM1.5 16.5a3 3 0 100-6 3 3 0 000 6zM16 14.5a3 3 0 10-6 0 3 3 0 006 0z" /></svg>}
+          title="AI-Powered Embeddings & Cohorts"
+        >
+          Leverage powerful AI tools to analyze data, generate insights, and work with pre-defined cohorts directly within your secure workspace.
+        </Feature>
+
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-6.5 6.5-3.536-3.536 6.5-6.5z" /></svg>}
+          title="Pre-release Data Access"
+        >
+          Seamlessly switch to 'Team Mode' to access and analyze pre-release datasets in a controlled and secure environment before they are made public.
+        </Feature>
+
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a.75.75 0 01.75.75v2.5a.75.75 0 01-1.5 0v-2.5a.75.75 0 01.75-.75zM10 3.25a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 3.25zM5.654 6.822a.75.75 0 011.058-.083l1.26 1.01a.75.75 0 01-.975 1.218l-1.26-1.01a.75.75 0 01-.083-1.058zm7.572 1.01a.75.75 0 01.975 1.218l-1.26 1.01a.75.75 0 11-.975-1.218l1.26-1.01z" /></svg>}
+          title="Easy to Use & 508 Compliant"
+        >
+          An intuitive interface that meets 508 compliance standards, ensuring accessibility for all users, coupled with a familiar Jupyter experience.
+        </Feature>
+
+        <Feature
+          icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M15.5 2.05a.75.75 0 00-1.061 1.06L15.22 3.9a.75.75 0 001.06-1.061l-.78-.78zM5.84 15.5a.75.75 0 10-1.061-1.06l-.78.78a.75.75 0 001.06 1.061l.78-.78zM16.28 14.44a.75.75 0 00-1.06-1.06l-.78.78a.75.75 0 101.06 1.06l.78-.78zM3.9 4.78a.75.75 0 00-1.06 1.06l.78.78a.75.75 0 001.06-1.06l-.78-.78zM10 1.25a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM10 16.25a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM3.75 10a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.75 10a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75z" /></svg>}
+          title="Shared Demo Notebooks"
+        >
+          Access a library of shared notebooks for demos and training, making it easy to get started and learn best practices from the community.
+        </Feature>
+      </div>
+    </div>
+  );
+};
+
 const WorkspaceJEGPage = ({
   headerProps,
   footerProps,
@@ -81,8 +152,8 @@ const WorkspaceJEGPage = ({
   const [globalNavTab, setGlobalNavTab] = useState<GlobalNavTab>('personal');
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [isApplyingProfile, setIsApplyingProfile] = useState(false);
-  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
-  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(true);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -207,7 +278,7 @@ const WorkspaceJEGPage = ({
   const jupyterCanvas = useMemo(() => {
     if (loading) {
       return (
-        <div className="m-4 rounded border border-slate-300 bg-white p-6 text-sm text-slate-600">
+        <div className="m-4 rounded border border-blue-200 bg-white p-6 text-sm text-blue-900">
           Initializing secure JEG session...
         </div>
       );
@@ -215,7 +286,7 @@ const WorkspaceJEGPage = ({
 
     if (error) {
       return (
-        <div className="m-4 rounded border border-slate-300 bg-white p-6 text-sm text-red-700">
+        <div className="m-4 rounded border border-red-300 bg-red-50 p-6 text-sm text-red-800">
           {error}
         </div>
       );
@@ -223,6 +294,10 @@ const WorkspaceJEGPage = ({
 
     if (!session) {
       return null;
+    }
+
+    if (!session.baseUrl) {
+      return <JupyterInfoPanel />;
     }
 
     if (session.previewMode) {
@@ -246,25 +321,25 @@ const WorkspaceJEGPage = ({
         key: 'workspace-jeg-page',
       }}
     >
-      <section className="flex h-screen w-screen flex-col overflow-hidden bg-slate-200">
-        <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-slate-300 bg-white px-6">
+      <section className="flex h-screen w-screen flex-col overflow-hidden bg-slate-100">
+        <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-3">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-600 text-white">
-                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <h1 className="text-base font-extrabold text-slate-900">Gen3 Workspace</h1>
+              <h1 className="text-lg font-bold text-slate-800">Gen3 Workspace</h1>
             </div>
-            <nav aria-label="Global workspace scope" className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-100 p-1">
+            <nav aria-label="Global workspace scope" className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
               {(['personal', 'team', 'demos'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => handleGlobalTabChange(tab)}
                   aria-pressed={globalNavTab === tab}
-                  className={`rounded px-4 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                  className={`rounded-md px-4 py-1.5 text-sm font-semibold capitalize transition-colors ${
                     globalNavTab === tab
                       ? 'bg-white text-blue-700 shadow-sm'
                       : 'text-slate-600 hover:bg-slate-200 hover:text-slate-800'
@@ -279,29 +354,11 @@ const WorkspaceJEGPage = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setIsLeftSidebarCollapsed((current) => !current)}
-              aria-controls="jeg-left-sidebar"
-              aria-expanded={!isLeftSidebarCollapsed}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-            >
-              {isLeftSidebarCollapsed ? 'Show Library' : 'Hide Library'}
-            </button>
-            <button
-              type="button"
               onClick={applyLaunchProfile}
               disabled={isApplyingProfile || loading || Boolean(error)}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
-              {isApplyingProfile ? 'Applying...' : 'Apply Profile'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsRightSidebarCollapsed((current) => !current)}
-              aria-controls="jeg-right-sidebar"
-              aria-expanded={!isRightSidebarCollapsed}
-              className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-            >
-              {isRightSidebarCollapsed ? 'Show Metrics' : 'Hide Metrics'}
+              {isApplyingProfile ? 'Applying...' : 'Apply & Launch'}
             </button>
           </div>
         </header>
@@ -309,71 +366,97 @@ const WorkspaceJEGPage = ({
         <div className="flex flex-1 overflow-hidden">
           <aside
             id="jeg-left-sidebar"
-            className={`shrink-0 overflow-hidden border-r border-slate-300 bg-slate-50 transition-all duration-300 ${
+            className={`shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ${
               isLeftSidebarCollapsed
-                ? 'w-0 border-r-0 opacity-0'
-                : 'w-[300px] opacity-100'
+                ? 'w-0 -translate-x-full border-r-0 opacity-0'
+                : 'w-[320px] translate-x-0 opacity-100'
             }`}
             aria-hidden={isLeftSidebarCollapsed}
           >
             <div
-              className={`h-full min-h-0 w-[300px] overflow-y-auto motion-safe:transition-opacity motion-safe:duration-200 motion-reduce:transition-none ${
+              className={`h-full min-h-0 w-[320px] overflow-y-auto motion-safe:transition-opacity motion-safe:duration-200 motion-reduce:transition-none ${
                 isLeftSidebarCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100'
               }`}
             >
-              <SharedLibrariesPanel
-                enabled={Boolean(session?.sharedLibraryEnabled)}
-                launchMode={launchMode}
-                selectedLibraryIds={selectedLibraryIds}
-                onSelectionChange={setSelectedLibraryIds}
-                activeScope={globalNavTab}
-              />
+              <div className="flex h-full flex-col">
+                <div className="flex items-center justify-between border-b border-slate-200 p-4">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                    Data & Tools
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsLeftSidebarCollapsed(true)}
+                    aria-label="Collapse data & tools sidebar"
+                    className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" /></svg>
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <SharedLibrariesPanel
+                    enabled={Boolean(session?.sharedLibraryEnabled)}
+                    launchMode={launchMode}
+                    selectedLibraryIds={selectedLibraryIds}
+                    onSelectionChange={setSelectedLibraryIds}
+                    activeScope={globalNavTab}
+                  />
+                </div>
+              </div>
             </div>
           </aside>
 
-          <main className="z-20 flex min-w-0 flex-1 flex-col overflow-hidden border-x border-slate-300 bg-white shadow-[-10px_0_20px_rgba(0,0,0,0.03),10px_0_20px_rgba(0,0,0,0.03)]">
-            <div className="shrink-0 border-b border-slate-300 bg-slate-50">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-2 text-[11px] font-bold uppercase tracking-wide">
-                <span className="flex items-center gap-2 text-red-800">
-                  <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4H4.5A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7H11z" />
-                  </svg>
-                  Data Exfiltration Prevention: Strict
-                </span>
-                <span className="flex items-center gap-1.5 text-emerald-700">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                  ZMQ Tunnel: {session?.requireZmqTls ? 'Encrypted' : 'Default'}
-                </span>
-              </div>
-
-              <div className="flex h-11 items-center gap-5 border-b border-slate-200 bg-white px-5 text-[13px] text-slate-700">
-                <span className="font-semibold text-slate-900">File</span>
-                <span>Edit</span>
-                <span>View</span>
-                <span>Run</span>
-                <span>Kernel</span>
-                <span>Settings</span>
-              </div>
-
-              {session && (
-                <div className="px-5 py-2">
-                  <ActiveMountsStatusBar
-                    launchMode={session.launchMode || launchMode}
-                    mounts={session.activeMounts || []}
-                  />
+          <main className="z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-white shadow-lg shadow-slate-200">
+            <div className="shrink-0 border-b border-slate-200 bg-slate-50/50">
+              <div className="flex h-12 items-center justify-between px-4">
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsLeftSidebarCollapsed((current) => !current)}
+                    aria-controls="jeg-left-sidebar"
+                    aria-expanded={!isLeftSidebarCollapsed}
+                    className="rounded-md p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 9.75A.75.75 0 012.75 9h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 9.75zM2 14.75A.75.75 0 012.75 14h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 14.75z" clipRule="evenodd" /></svg>
+                    <span className="sr-only">Toggle Data & Tools</span>
+                  </button>
+                  <div className="h-6 w-px bg-slate-200" />
+                  {session && (
+                    <ActiveMountsStatusBar
+                      launchMode={session.launchMode || launchMode}
+                      mounts={session.activeMounts || []}
+                    />
+                  )}
                 </div>
-              )}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <svg className="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
+                        <span>Exfiltration Control: <strong>{session?.exfiltrationPolicy || 'Strict'}</strong></span>
+                  </div>
+                  <div className="h-6 w-px bg-slate-200" />
+                  <button
+                    type="button"
+                    onClick={() => setIsRightSidebarCollapsed((current) => !current)}
+                    aria-controls="jeg-right-sidebar"
+                    aria-expanded={!isRightSidebarCollapsed}
+                    className="rounded-md p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.75a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM10 8.75a.75.75 0 01.75.75v6.5a.75.75 0 01-1.5 0v-6.5a.75.75 0 01.75-.75zM8.25 4.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z" /></svg>
+                    <span className="sr-only">Toggle Infrastructure State</span>
+                  </button>
+                </div>
+              </div>
 
               {session?.hasExportContext && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-2 text-xs text-slate-600">
+                <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-4 py-2 text-xs text-slate-600">
+                  <span className="font-semibold">Active Data Context:</span>
                   <span>
-                    Source: {session.exportSource || 'unknown'}
-                    {session.exportCohortId ? ` • Cohort ${session.exportCohortId}` : ''}
+                    {session.exportSource || 'unknown'}
+                    {session.exportCohortId ? ` / Cohort ${session.exportCohortId}` : ''}
                   </span>
                   <button
                     type="button"
                     onClick={clearExportContext}
-                    className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-100"
+                    className="ml-auto rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                   >
                     Clear context
                   </button>
@@ -382,16 +465,16 @@ const WorkspaceJEGPage = ({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="h-full min-h-0 w-full overflow-hidden">{jupyterCanvas}</div>
+              <div className="h-full min-h-0 w-full overflow-y-auto">{jupyterCanvas}</div>
             </div>
           </main>
 
           <aside
             id="jeg-right-sidebar"
-            className={`shrink-0 overflow-hidden border-l border-slate-300 bg-slate-50 transition-all duration-300 ${
+            className={`shrink-0 overflow-hidden border-l border-slate-200 bg-white transition-all duration-300 ${
               isRightSidebarCollapsed
-                ? 'w-0 border-l-0 opacity-0'
-                : 'w-[340px] opacity-100'
+                ? 'w-0 translate-x-full border-l-0 opacity-0'
+                : 'w-[340px] translate-x-0 opacity-100'
             }`}
             aria-hidden={isRightSidebarCollapsed}
           >
@@ -400,23 +483,29 @@ const WorkspaceJEGPage = ({
                 isRightSidebarCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100'
               }`}
             >
-              <div className="flex items-center justify-between border-b border-slate-300 bg-white px-5 py-4">
-                <span className="text-xs font-extrabold tracking-wide text-slate-900">
-                  INFRASTRUCTURE STATE
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsRightSidebarCollapsed(true)}
-                  aria-label="Collapse infrastructure sidebar"
-                  className="rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-                >
-                  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-4">
-              <KernelLifecyclePanel />
+              <div className="flex h-full flex-col">
+                <div className="flex items-center justify-between border-b border-slate-200 p-4">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                    Infrastructure & Costs
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsRightSidebarCollapsed(true)}
+                    aria-label="Collapse infrastructure sidebar"
+                    className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">Pay-per-use compute</p>
+                    <p className="mt-1">You are only billed for active compute time. Your kernel will automatically shut down after a period of inactivity to save costs.</p>
+                  </div>
+                  <div className="mt-4">
+                    <KernelLifecyclePanel />
+                  </div>
+                </div>
               </div>
             </div>
           </aside>
