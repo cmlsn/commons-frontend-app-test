@@ -7,6 +7,9 @@
     "/Workspace": {
       "loginRequired": true
     },
+    "/Workspace/JEG": {
+      "loginRequired": true
+    },
     "/Profile": {
       "loginRequired": false
     },

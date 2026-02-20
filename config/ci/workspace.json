@@ -1,3 +1,10 @@
 {
-    "requirePayModel": false
+    "requirePayModel": false,
+    "apps": [
+        {
+            "name": "Secure Jupyter (JEG)",
+            "description": "Launch a full Jupyter workspace with Zero-Trust access controls.",
+            "url": "/Workspace/JEG"
+        }
+    ]
 }
