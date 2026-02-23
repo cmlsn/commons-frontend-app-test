@@ -33,6 +33,14 @@ export function isJegPreviewModeEnabled(): boolean {
   return previewEnabled;
 }
 
+export function isLocalJegDevelopmentModeEnabled(): boolean {
+  const localDevEnabled = process.env.JEG_LOCAL_DEV_MODE === 'true';
+  if (process.env.NODE_ENV === 'production' && localDevEnabled) {
+    throw new Error('Local development mode cannot run in production');
+  }
+  return localDevEnabled;
+}
+
 type JupyterExportContextPayload = {
   cohortId?: string;
   cohortName?: string;
@@ -100,6 +108,17 @@ function pickUserIdentifier(userContext: Record<string, any> | undefined): strin
 }
 
 export async function resolveWorkspaceIdentityFromCookie(cookie: string) {
+  if (isLocalJegDevelopmentModeEnabled()) {
+    return {
+      ok: true as const,
+      identity: {
+        workspaceId: 'local-dev-workspace',
+        userId: 'local-dev-user',
+      } satisfies WorkspaceIdentity,
+      loginStatus: { status: 'issued', userContext: {} } as any,
+    };
+  }
+
   const loginStatus = await getLoginStatus(cookie);
   if (loginStatus.status !== 'issued') {
     return {
@@ -205,7 +224,7 @@ export function assertSecureJegConfiguration() {
     );
   }
 
-  if (getRequireEncryptedTransport()) {
+  if (getRequireEncryptedTransport() && !isLocalJegDevelopmentModeEnabled()) {
     if (!isSecureUrl(jegServerUrl, ['https:'])) {
       throw new Error(
         'JEG_SERVER_URL must use HTTPS when JEG_ENFORCE_ENCRYPTED_TRANSPORT is enabled.',

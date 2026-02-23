@@ -2,7 +2,7 @@ import {
   buildIapHeaders,
   buildWorkspaceHeaders,
   type WorkspaceIdentityType,
-} from '@/lib/workspace/jegSecurity';
+} from './jegSecurity';
 
 export type SharedLibraryRecord = {
   id: string;
