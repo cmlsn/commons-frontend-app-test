@@ -37,6 +37,11 @@ export function isLibraryServiceEnabled() {
   return Boolean(getLibraryServiceUrl());
 }
 
+function truncateErrorDetail(detail: string): string {
+  if (!detail) return '';
+  return detail.length > 200 ? `${detail.slice(0, 200)}...` : detail;
+}
+
 export async function fetchSharedLibrariesForUser(
   identity: WorkspaceIdentityType,
   accessToken: string | null,
@@ -62,7 +67,7 @@ export async function fetchSharedLibrariesForUser(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
-      `Failed to fetch shared libraries: ${response.status} ${detail || ''}`.trim(),
+      `Failed to fetch shared libraries: ${response.status} ${truncateErrorDetail(detail)}`.trim(),
     );
   }
 
@@ -99,7 +104,7 @@ export async function shareLibraryWithUsers(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
-      `Failed to share library: ${response.status} ${detail || ''}`.trim(),
+      `Failed to share library: ${response.status} ${truncateErrorDetail(detail)}`.trim(),
     );
   }
 
@@ -132,7 +137,7 @@ export async function fetchUserLibraryItems(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
-      `Failed to fetch my library items: ${response.status} ${detail || ''}`.trim(),
+      `Failed to fetch my library items: ${response.status} ${truncateErrorDetail(detail)}`.trim(),
     );
   }
 
@@ -178,7 +183,7 @@ export async function publishUserLibraryItem(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
-      `Failed to publish my library item: ${response.status} ${detail || ''}`.trim(),
+      `Failed to publish my library item: ${response.status} ${truncateErrorDetail(detail)}`.trim(),
     );
   }
 

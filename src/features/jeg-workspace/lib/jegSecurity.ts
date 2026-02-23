@@ -28,15 +28,22 @@ const JEG_LAUNCH_COOKIE_NAME = 'jeg_launch';
 export function isJegPreviewModeEnabled(): boolean {
   const previewEnabled = process.env.JEG_UI_PREVIEW_MODE === 'true';
   if (process.env.NODE_ENV === 'production' && previewEnabled) {
+    console.error('SECURITY ALERT: JEG_UI_PREVIEW_MODE is enabled in a production environment. This is not allowed.');
     throw new Error('Preview mode cannot run in production');
   }
   return previewEnabled;
 }
 
 export function isLocalJegDevelopmentModeEnabled(): boolean {
+  // STRICT CHECK: Never allow this in production builds, regardless of the env var.
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
   const localDevEnabled = process.env.JEG_LOCAL_DEV_MODE === 'true';
-  if (process.env.NODE_ENV === 'production' && localDevEnabled) {
-    throw new Error('Local development mode cannot run in production');
+  if (localDevEnabled) {
+    // Audit log for development usage
+    console.warn('WARNING: JEG Local Development Mode is ACTIVE. Authentication is bypassed.');
   }
   return localDevEnabled;
 }

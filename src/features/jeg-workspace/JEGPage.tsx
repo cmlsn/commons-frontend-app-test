@@ -171,6 +171,12 @@ const WorkspaceJEGPage = ({
 
         if (!response.ok) {
           const body = await response.json().catch(() => null);
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Access Denied: Please log in to access your workspace.');
+          }
+          if (response.status >= 500) {
+            throw new Error('System Unavailable: The workspace service is currently experiencing issues. Please try again later.');
+          }
           throw new Error(body?.error || 'Unable to initialize secure JEG session.');
         }
 
@@ -182,7 +188,7 @@ const WorkspaceJEGPage = ({
         setSelectedLibraryIds(data.selectedLibraryIds || []);
       } catch (e: any) {
         if (!mounted) return;
-        setError(e?.message || 'Unable to initialize secure JEG session.');
+        setError(e?.message || 'Unable to initialize secure JEG session. Please check your network connection.');
       } finally {
         if (mounted) {
           setLoading(false);
