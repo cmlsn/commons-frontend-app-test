@@ -9,11 +9,11 @@ import {
   getProxyBaseUrl,
   getRequireEncryptedTransport,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 import {
   fetchSharedLibrariesForUser,
   isLibraryServiceEnabled,
-} from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/sharedLibraries';
 
 export default async function handler(
   req: NextApiRequest,

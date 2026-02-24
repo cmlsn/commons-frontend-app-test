@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { ReactNode, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
 import type { GetServerSidePropsContext } from 'next';
@@ -69,7 +69,13 @@ const DatalayerJupyterShell = dynamic(
   { ssr: false },
 );
 
-const Feature = ({ icon, title, children }) => (
+type FeatureProps = {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+};
+
+const Feature = ({ icon, title, children }: FeatureProps) => (
   <div className="flex items-start gap-3">
     <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
       {icon}
@@ -98,7 +104,7 @@ const JupyterInfoPanel = () => {
           icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 01.75.75v.51a4.5 4.5 0 014.235 4.432l.015.058.015.057V10a2 2 0 01-1.995 1.995L13 12H7a2 2 0 01-2-2V7.75a4.5 4.5 0 014.492-4.492L10 3.25a.75.75 0 01.75-.75zM10 5a2.5 2.5 0 00-2.5 2.5V9h5V7.5A2.5 2.5 0 0010 5z" /></svg>}
           title="Pay-per-use & Cost-Efficient"
         >
-          Your workspace only consumes resources when you're actively running computations. Kernels automatically shut down when idle, ensuring you only pay for what you use.
+          Your workspace only consumes resources when you are actively running computations. Kernels automatically shut down when idle, ensuring you only pay for what you use.
         </Feature>
 
         <Feature
@@ -119,7 +125,7 @@ const JupyterInfoPanel = () => {
           icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-6.5 6.5-3.536-3.536 6.5-6.5z" /></svg>}
           title="Pre-release Data Access"
         >
-          Seamlessly switch to 'Team Mode' to access and analyze pre-release datasets in a controlled and secure environment before they are made public.
+          Seamlessly switch to &apos;Team Mode&apos; to access and analyze pre-release datasets in a controlled and secure environment before they are made public.
         </Feature>
 
         <Feature
@@ -437,7 +443,9 @@ const WorkspaceJEGPage = ({
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                     <svg className="h-4 w-4 text-amber-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
-                        <span>Exfiltration Control: strong>{session?.exfiltrationPolicy || 'Strict'}</strong></span>
+                    <span>
+                      Exfiltration Control: <strong>{session?.exfiltrationPolicy || 'Strict'}</strong>
+                    </span>
                   </div>
                   <div className="h-6 w-px bg-slate-200" />
                   <button

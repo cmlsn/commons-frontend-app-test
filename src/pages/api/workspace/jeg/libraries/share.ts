@@ -5,8 +5,8 @@ import { fetchArboristResources } from '@/lib/auth/fetchAuthz';
 import {
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
-import { shareLibraryWithUsers } from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/jegSecurity';
+import { shareLibraryWithUsers } from '@/features/jeg-workspace/lib/sharedLibraries';
 
 type ShareBody = {
   libraryId?: string;

@@ -4,10 +4,8 @@ import { useRouter } from 'next/router';
 import { NavPageLayout, NavPageLayoutProps } from '@gen3/frontend';
 import { getAllApps } from '../config';
 
-type Props = {
+type Props = Pick<NavPageLayoutProps, 'headerProps' | 'footerProps'> & {
   children: ReactNode;
-  headerProps?: NavPageLayoutProps['headerProps'];
-  footerProps?: NavPageLayoutProps['footerProps'];
   title?: string;
 };
 
@@ -95,7 +93,7 @@ const WorkspaceLayout = ({ children, headerProps, footerProps, title = 'Workspac
             {apps.map((app) => (
               <Link
                 key={app.id}
-                href={`/workspace/apps/${app.id}`}
+                href={`/Workspace/Apps/${app.id}`}
                 className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   router.query.appId === app.id
                     ? 'bg-blue-50 text-blue-700'

@@ -4,7 +4,7 @@ import {
   createJupyterExportContextToken,
   getJegContextCookieName,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 
 type ExportRequestBody = {
   cohortId?: string;

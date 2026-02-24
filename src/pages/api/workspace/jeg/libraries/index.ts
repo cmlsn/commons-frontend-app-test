@@ -4,11 +4,11 @@ import { fetchArboristResources } from '@/lib/auth/fetchAuthz';
 import {
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 import {
   fetchSharedLibrariesForUser,
   isLibraryServiceEnabled,
-} from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/sharedLibraries';
 
 function hasAuthzForLibraries(resources: string[]) {
   const requiredResource = process.env.JEG_LIBRARY_READ_AUTHZ_RESOURCE?.trim();

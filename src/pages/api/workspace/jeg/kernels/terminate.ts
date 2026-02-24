@@ -4,8 +4,8 @@ import {
   getProxyBaseUrl,
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
-import { publishUserLibraryItem } from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/jegSecurity';
+import { publishUserLibraryItem } from '@/features/jeg-workspace/lib/sharedLibraries';
 
 type TerminateBody = {
   kernelId?: string;

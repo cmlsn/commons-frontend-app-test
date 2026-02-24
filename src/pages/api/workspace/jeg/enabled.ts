@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   assertSecureJegConfiguration,
   isJegPreviewModeEnabled,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {

@@ -7,8 +7,8 @@ import {
   isJegPreviewModeEnabled,
   parseJegLaunchProfileFromCookie,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
-import { fetchSharedLibrariesForUser } from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/jegSecurity';
+import { fetchSharedLibrariesForUser } from '@/features/jeg-workspace/lib/sharedLibraries';
 
 type LaunchProfileBody = {
   mode?: 'personal' | 'pre-release';

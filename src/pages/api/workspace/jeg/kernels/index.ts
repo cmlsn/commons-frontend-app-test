@@ -3,7 +3,7 @@ import {
   getProxyBaseUrl,
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 
 const IDLE_WARNING_DAYS = Number(process.env.JEG_IDLE_WARNING_DAYS || '5');
 const IDLE_KILL_DAYS = Number(process.env.JEG_IDLE_KILL_DAYS || '10');

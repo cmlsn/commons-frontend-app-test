@@ -1,13 +1,22 @@
 import React from 'react';
 import Link from 'next/link';
+import { GetServerSideProps } from 'next';
+import {
+  NavPageLayoutProps,
+  getNavPageLayoutPropsFromConfig,
+} from '@gen3/frontend';
 import { WorkspaceLayout } from '@/features/workspace-apps';
 import { getAllApps } from '@/features/workspace-apps/config';
 
-const WorkspaceHome = () => {
+const WorkspaceHome = ({ headerProps, footerProps }: NavPageLayoutProps) => {
   const apps = getAllApps();
 
   return (
-    <WorkspaceLayout title="Home">
+    <WorkspaceLayout
+      headerProps={headerProps}
+      footerProps={footerProps}
+      title="Home"
+    >
       <div className="h-full w-full overflow-y-auto bg-slate-50 p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-8">
@@ -41,7 +50,7 @@ const WorkspaceHome = () => {
             {apps.map((app) => (
               <Link
                 key={app.id}
-                href={`/workspace/apps/${app.id}`}
+                  href={`/Workspace/Apps/${app.id}`}
                 className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:border-blue-400 hover:shadow-md"
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
@@ -71,5 +80,14 @@ const WorkspaceHome = () => {
     </WorkspaceLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps<NavPageLayoutProps> =
+  async () => {
+    return {
+      props: {
+        ...(await getNavPageLayoutPropsFromConfig()),
+      },
+    };
+  };
 
 export default WorkspaceHome;

@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
+import {
+  NavPageLayoutProps,
+  getNavPageLayoutPropsFromConfig,
+} from '@gen3/frontend';
 import { WorkspaceLayout, SecureAppCanvas, getAppConfig } from '@/features/workspace-apps';
 
-const WorkspaceAppPage = () => {
+const WorkspaceAppPage = ({ headerProps, footerProps }: NavPageLayoutProps) => {
   const router = useRouter();
   const { appId } = router.query;
   const [loading, setLoading] = useState(true);
@@ -21,7 +26,11 @@ const WorkspaceAppPage = () => {
 
   if (loading) {
     return (
-      <WorkspaceLayout title="Loading...">
+      <WorkspaceLayout
+        headerProps={headerProps}
+        footerProps={footerProps}
+        title="Loading..."
+      >
         <div className="flex h-full items-center justify-center bg-slate-50">
           <div className="text-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600 mx-auto mb-4"></div>
@@ -34,7 +43,11 @@ const WorkspaceAppPage = () => {
 
   if (error || !appConfig) {
     return (
-      <WorkspaceLayout title="Error">
+      <WorkspaceLayout
+        headerProps={headerProps}
+        footerProps={footerProps}
+        title="Error"
+      >
         <div className="flex h-full items-center justify-center bg-slate-50">
           <div className="max-w-md rounded-lg border border-red-200 bg-white p-6 text-center shadow-sm">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
@@ -57,10 +70,23 @@ const WorkspaceAppPage = () => {
   }
 
   return (
-    <WorkspaceLayout title={appConfig.displayName}>
+    <WorkspaceLayout
+      headerProps={headerProps}
+      footerProps={footerProps}
+      title={appConfig.displayName}
+    >
       <SecureAppCanvas appId={appConfig.id} defaultPath={appConfig.defaultPath} />
     </WorkspaceLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps<NavPageLayoutProps> =
+  async () => {
+    return {
+      props: {
+        ...(await getNavPageLayoutPropsFromConfig()),
+      },
+    };
+  };
 
 export default WorkspaceAppPage;

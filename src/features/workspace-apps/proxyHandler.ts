@@ -1,11 +1,21 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import httpProxy from 'http-proxy';
+import { ServerResponse } from 'http';
 import { getAppConfig } from './config';
 import {
   resolveWorkspaceIdentityFromCookie,
   getRequireEncryptedTransport,
   assertSecureJegConfiguration
 } from '@/features/jeg-workspace/lib/jegSecurity';
+
+function isServerResponse(value: unknown): value is ServerResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'writeHead' in value &&
+    'end' in value
+  );
+}
 
 // Helper to safely serialize JSON for script injection
 function safeStringify(obj: any): string {
@@ -20,8 +30,11 @@ const proxy = httpProxy.createProxyServer({
   selfHandleResponse: true,
 });
 
-proxy.on('error', (err, req, res) => {
+proxy.on('error', (err, _req, res) => {
   console.error('Proxy error:', err);
+  if (!isServerResponse(res)) {
+    return;
+  }
   if (!res.headersSent) {
     res.writeHead(502, { 'Content-Type': 'application/json' });
   }
@@ -86,6 +99,7 @@ proxy.on('proxyRes', (proxyRes, req, res) => {
 
 export default async function proxyHandler(req: NextApiRequest, res: NextApiResponse) {
   const { appId } = req.query;
+  const normalizedAppId = Array.isArray(appId) ? appId[0] : appId;
 
   // 1. Validate Session (Zero Trust)
   const identity = await resolveWorkspaceIdentityFromCookie(req.headers.cookie || '');
@@ -94,7 +108,7 @@ export default async function proxyHandler(req: NextApiRequest, res: NextApiResp
   }
 
   // 2. Validate App Configuration
-  const appConfig = getAppConfig(appId as string);
+  const appConfig = getAppConfig(normalizedAppId as string);
   if (!appConfig) {
     return res.status(404).json({ error: 'App not found' });
   }
@@ -105,7 +119,7 @@ export default async function proxyHandler(req: NextApiRequest, res: NextApiResp
       assertSecureJegConfiguration();
     } catch (e) {
        if (!appConfig.upstreamUrl.startsWith('https://')) {
-         console.warn(`Security Warning: Upstream app ${appId} is using insecure HTTP transport.`);
+         console.warn(`Security Warning: Upstream app ${normalizedAppId} is using insecure HTTP transport.`);
        }
     }
   }
@@ -114,6 +128,15 @@ export default async function proxyHandler(req: NextApiRequest, res: NextApiResp
   req.headers['x-workspace-user'] = identity.identity.userId;
   req.headers['x-workspace-id'] = identity.identity.workspaceId;
 
+  const routePrefix = `/api/workspace/proxy/${normalizedAppId}`;
+  if (req.url && req.url.startsWith(routePrefix)) {
+    const rewritten = req.url.slice(routePrefix.length);
+    req.url = rewritten.startsWith('/') ? rewritten : `/${rewritten}`;
+    if (req.url === '/') {
+      req.url = '/';
+    }
+  }
+
   // 5. Proxy the Request
   // Note: Next.js API routes don't natively support the 'upgrade' event for WebSockets
   // in the same way a raw Node server does. However, http-proxy handles the upgrade
@@ -121,8 +144,5 @@ export default async function proxyHandler(req: NextApiRequest, res: NextApiResp
   // your Next.js server (or the ingress controller in front of it) allows WebSocket upgrades.
   proxy.web(req, res, {
     target: appConfig.upstreamUrl,
-    pathRewrite: {
-      [`^/api/workspace/proxy/${appId}`]: '',
-    },
   });
 }

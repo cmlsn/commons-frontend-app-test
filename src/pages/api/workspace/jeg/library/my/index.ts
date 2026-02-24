@@ -3,11 +3,11 @@ import { getAccessToken } from '@/lib/auth/getLoginStatus';
 import {
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 import {
   fetchUserLibraryItems,
   publishUserLibraryItem,
-} from '@/lib/workspace/sharedLibraries';
+} from '@/features/jeg-workspace/lib/sharedLibraries';
 
 type PublishBody = {
   title?: string;
