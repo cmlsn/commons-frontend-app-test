@@ -6,6 +6,7 @@ import {
   isJegPreviewModeEnabled,
   parseJupyterExportContextFromCookie,
   parseJegLaunchProfileFromCookie,
+  parseJegRuntimeRouteFromCookie,
   getProxyBaseUrl,
   getRequireEncryptedTransport,
   resolveWorkspaceIdentityFromCookie,
@@ -90,6 +91,10 @@ export default async function handler(
     req.headers.cookie || '',
     identityResult.identity,
   );
+  const runtimeRoute = await parseJegRuntimeRouteFromCookie(
+    req.headers.cookie || '',
+    identityResult.identity,
+  );
 
   let activeMounts: Array<{ id: string; displayName: string; s3Uri: string }> = [];
   if (
@@ -118,9 +123,9 @@ export default async function handler(
   }
 
   return res.status(200).json({
-    baseUrl: proxyBaseUrl,
-    wsUrl: process.env.JEG_WS_URL || derivedWsUrl,
-    token,
+    baseUrl: runtimeRoute?.route.baseUrl || proxyBaseUrl,
+    wsUrl: runtimeRoute?.route.wsUrl || process.env.JEG_WS_URL || derivedWsUrl,
+    token: runtimeRoute?.route.token || token,
     workspaceId: identityResult.identity.workspaceId,
     defaultPath: process.env.JEG_DEFAULT_NOTEBOOK_PATH || '/lab',
     exfiltrationPolicy: getDataExfiltrationPolicy(),

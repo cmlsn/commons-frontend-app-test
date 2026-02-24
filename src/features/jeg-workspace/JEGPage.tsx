@@ -192,7 +192,9 @@ const WorkspaceJEGPage = ({
           if (response.status >= 500) {
             throw new Error('System Unavailable: The workspace service is currently experiencing issues. Please try again later.');
           }
-          throw new Error(body?.error || 'Unable to initialize secure JEG session.');
+          throw new Error(
+            body?.error || 'Unable to initialize secure JupyterLab runtime session.',
+          );
         }
 
         const data = (await response.json()) as JegSession;
@@ -203,7 +205,10 @@ const WorkspaceJEGPage = ({
         setSelectedLibraryIds(data.selectedLibraryIds || []);
       } catch (e: any) {
         if (!mounted) return;
-        setError(e?.message || 'Unable to initialize secure JEG session. Please check your network connection.');
+        setError(
+          e?.message ||
+            'Unable to initialize secure JupyterLab runtime session. Please check your network connection.',
+        );
       } finally {
         if (mounted) {
           setLoading(false);
@@ -259,6 +264,19 @@ const WorkspaceJEGPage = ({
         throw new Error(body?.error || 'Unable to apply launch profile.');
       }
 
+      const launchResponse = await fetch('/api/workspace/jeg/launch', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!launchResponse.ok) {
+        const body = await launchResponse.json().catch(() => null);
+        throw new Error(
+          body?.error ||
+            'Unable to launch isolated JupyterLab runtime for this workspace.',
+        );
+      }
+
       const refreshed = await fetch('/api/workspace/jeg/session', {
         method: 'GET',
         credentials: 'include',
@@ -301,7 +319,7 @@ const WorkspaceJEGPage = ({
     if (loading) {
       return (
         <div className="m-4 rounded border border-blue-200 bg-white p-6 text-sm text-blue-900">
-          Initializing secure JEG session...
+          Initializing secure JupyterLab runtime...
         </div>
       );
     }
@@ -325,7 +343,7 @@ const WorkspaceJEGPage = ({
     if (session.previewMode) {
       return (
         <div className="flex h-full w-full items-center justify-center bg-slate-50 p-6 text-sm text-slate-600">
-          Preview mode enabled: JEG backend is mocked. This panel shows UI
+          Preview mode enabled: JupyterLab runtime backend is mocked. This panel shows UI
           layout and controls without connecting to a live kernel service.
         </div>
       );
@@ -338,8 +356,8 @@ const WorkspaceJEGPage = ({
     <NavPageLayout
       {...{ headerProps, footerProps }}
       headerMetadata={{
-        title: 'Workspace Jupyter (JEG)',
-        content: 'Secure Jupyter Workspace',
+        title: 'Workspace JupyterLab',
+        content: 'Secure JupyterLab Workspace',
         key: 'workspace-jeg-page',
       }}
     >
@@ -380,7 +398,7 @@ const WorkspaceJEGPage = ({
               disabled={isApplyingProfile || loading || Boolean(error)}
               className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
-              {isApplyingProfile ? 'Applying...' : 'Apply & Launch'}
+              {isApplyingProfile ? 'Applying...' : 'Apply & Launch JupyterLab'}
             </button>
           </div>
         </header>

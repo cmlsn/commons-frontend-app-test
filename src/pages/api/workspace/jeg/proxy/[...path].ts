@@ -116,8 +116,20 @@ export default async function handler(
   }
 
   const requestedPath = `/${asPathArray(req.query.path).join('/')}`;
+  const queryEntries = Object.entries(req.query).filter(([key]) => key !== 'path');
+  const queryParams = new URLSearchParams();
+  for (const [key, value] of queryEntries) {
+    if (Array.isArray(value)) {
+      for (const item of value) queryParams.append(key, item);
+    } else if (typeof value === 'string') {
+      queryParams.append(key, value);
+    }
+  }
+  const requestedPathWithQuery = queryParams.toString()
+    ? `${requestedPath}?${queryParams.toString()}`
+    : requestedPath;
   const policyDecision = evaluateExfiltrationPolicy(
-    requestedPath,
+    requestedPathWithQuery,
     method,
     getDataExfiltrationPolicy(),
   );

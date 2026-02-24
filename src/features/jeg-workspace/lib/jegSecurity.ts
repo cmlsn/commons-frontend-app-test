@@ -24,6 +24,7 @@ const WORKSPACE_CLAIM_CANDIDATES = [
 const JEG_SERVER_URL_ENV = 'JEG_SERVER_URL';
 const JEG_CONTEXT_COOKIE_NAME = 'jeg_context';
 const JEG_LAUNCH_COOKIE_NAME = 'jeg_launch';
+const JEG_RUNTIME_COOKIE_NAME = 'jeg_runtime';
 
 export function isJegPreviewModeEnabled(): boolean {
   const previewEnabled = process.env.JEG_UI_PREVIEW_MODE === 'true';
@@ -71,6 +72,19 @@ type JegLaunchProfilePayload = {
 };
 
 export type JegLaunchProfile = JegLaunchProfilePayload & {
+  workspaceId: string;
+  userId: string;
+};
+
+type JegRuntimeRoutePayload = {
+  baseUrl: string;
+  wsUrl: string;
+  token?: string;
+  disableExport?: boolean;
+  dataExfiltrationPolicy?: DataExfiltrationPolicy;
+};
+
+export type JegRuntimeRoute = JegRuntimeRoutePayload & {
   workspaceId: string;
   userId: string;
 };
@@ -262,6 +276,9 @@ export function evaluateExfiltrationPolicy(
 
   const path = upstreamPath.toLowerCase();
   const isWriteMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  const isContentsDownloadRequest =
+    path.startsWith('/api/contents') &&
+    (path.includes('download=1') || path.includes('download=true'));
 
   if (path.startsWith('/api/terminals')) {
     return {
@@ -282,6 +299,13 @@ export function evaluateExfiltrationPolicy(
       return {
         allowed: false as const,
         reason: 'Direct file download endpoints are disabled in strict policy.',
+      };
+    }
+
+    if (isContentsDownloadRequest) {
+      return {
+        allowed: false as const,
+        reason: 'Content download requests are disabled in strict policy.',
       };
     }
 
@@ -316,12 +340,39 @@ function getLaunchSigningKey(): Uint8Array | null {
   return getContextSigningKey();
 }
 
+function getRuntimeSigningKey(): Uint8Array | null {
+  const explicitRuntimeKey = process.env.JEG_RUNTIME_SIGNING_KEY?.trim();
+  if (explicitRuntimeKey) return new TextEncoder().encode(explicitRuntimeKey);
+  return getLaunchSigningKey();
+}
+
+function getRuntimeAllowedSchemes() {
+  if (
+    process.env.JUPYTERLAB_LOCAL_DEV_MODE === 'true' ||
+    isLocalJegDevelopmentModeEnabled()
+  ) {
+    return {
+      httpSchemes: ['https:', 'http:'],
+      wsSchemes: ['wss:', 'ws:'],
+    };
+  }
+
+  return {
+    httpSchemes: ['https:'],
+    wsSchemes: ['wss:'],
+  };
+}
+
 export function getJegContextCookieName() {
   return JEG_CONTEXT_COOKIE_NAME;
 }
 
 export function getJegLaunchCookieName() {
   return JEG_LAUNCH_COOKIE_NAME;
+}
+
+export function getJegRuntimeCookieName() {
+  return JEG_RUNTIME_COOKIE_NAME;
 }
 
 export async function createJupyterExportContextToken(
@@ -479,6 +530,102 @@ export async function parseJegLaunchProfileFromCookie(
         workspaceId: payload.workspaceId,
         userId: payload.userId,
       } satisfies JegLaunchProfile,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function createJegRuntimeRouteToken(
+  identity: WorkspaceIdentity,
+  payload: JegRuntimeRoutePayload,
+) {
+  const key = getRuntimeSigningKey();
+  if (!key) {
+    throw new Error(
+      'JEG_RUNTIME_SIGNING_KEY, JEG_LAUNCH_SIGNING_KEY, or JEG_CONTEXT_SIGNING_KEY must be configured for runtime route control.',
+    );
+  }
+
+  const allowedSchemes = getRuntimeAllowedSchemes();
+
+  if (!isSecureUrl(payload.baseUrl, allowedSchemes.httpSchemes)) {
+    throw new Error('Runtime baseUrl must use an allowed transport scheme.');
+  }
+  if (!isSecureUrl(payload.wsUrl, allowedSchemes.wsSchemes)) {
+    throw new Error('Runtime wsUrl must use an allowed WebSocket scheme.');
+  }
+
+  const maxAgeSeconds = Number(process.env.JEG_RUNTIME_TOKEN_TTL_SECONDS || '900');
+  const safeMaxAge = Number.isFinite(maxAgeSeconds) && maxAgeSeconds > 0
+    ? Math.floor(maxAgeSeconds)
+    : 900;
+
+  const token = await new SignJWT({
+    workspaceId: identity.workspaceId,
+    userId: identity.userId,
+    ...payload,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(`${safeMaxAge}s`)
+    .setSubject(identity.userId)
+    .sign(key);
+
+  return {
+    token,
+    maxAgeSeconds: safeMaxAge,
+  };
+}
+
+export async function parseJegRuntimeRouteFromCookie(
+  cookieHeader: string,
+  identity: WorkspaceIdentity,
+) {
+  const cookies = parse(cookieHeader || '');
+  const token = cookies[JEG_RUNTIME_COOKIE_NAME];
+  if (!token) return null;
+
+  const key = getRuntimeSigningKey();
+  if (!key) return null;
+
+  try {
+    const verified = await jwtVerify(token, key);
+    const payload = verified.payload as Record<string, any>;
+    const allowedSchemes = getRuntimeAllowedSchemes();
+
+    if (
+      payload.userId !== identity.userId ||
+      payload.workspaceId !== identity.workspaceId
+    ) {
+      return null;
+    }
+
+    if (
+      typeof payload.baseUrl !== 'string' ||
+      !isSecureUrl(payload.baseUrl, allowedSchemes.httpSchemes) ||
+      typeof payload.wsUrl !== 'string' ||
+      !isSecureUrl(payload.wsUrl, allowedSchemes.wsSchemes)
+    ) {
+      return null;
+    }
+
+    return {
+      token,
+      route: {
+        baseUrl: payload.baseUrl,
+        wsUrl: payload.wsUrl,
+        token: typeof payload.token === 'string' ? payload.token : undefined,
+        disableExport: payload.disableExport === true,
+        dataExfiltrationPolicy:
+          payload.dataExfiltrationPolicy === 'strict' ||
+          payload.dataExfiltrationPolicy === 'balanced' ||
+          payload.dataExfiltrationPolicy === 'open'
+            ? payload.dataExfiltrationPolicy
+            : undefined,
+        workspaceId: payload.workspaceId,
+        userId: payload.userId,
+      } satisfies JegRuntimeRoute,
     };
   } catch {
     return null;

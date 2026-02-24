@@ -26,7 +26,7 @@ frontend-framework:
     tag: main
 ```
 
-## Secure Workspace JEG configuration
+## Secure Workspace JupyterLab runtime configuration (JEG proxy compatible)
 
 The Workspace JEG route at `/Workspace/JEG` uses server-side proxy endpoints to enforce
 Fence-backed identity, user-workspace scoping, and optional IAP headers.
@@ -40,6 +40,18 @@ Set these runtime environment variables in your deployment:
 - `JEG_WS_URL` (optional): Explicit WebSocket URL; if omitted, derived from `JEG_SERVER_URL`.
 - `JEG_CLIENT_TOKEN` (optional): Token exposed to client-side Jupyter shell if required.
 - `JEG_ENFORCE_ENCRYPTED_TRANSPORT` (optional): Defaults to `true`; requires `https`/`wss`.
+- `JUPYTERLAB_LAUNCHER_URL` (required for isolated JupyterLab head launch): launcher endpoint that provisions/returns per-user runtime routes. (`JEG_LAUNCHER_URL` alias supported)
+- `JUPYTERLAB_LAUNCH_TIMEOUT_MS` (optional): launcher request timeout in milliseconds (default `30000`). (`JEG_LAUNCH_TIMEOUT_MS` alias supported)
+- `JEG_RUNTIME_SIGNING_KEY` (optional): signing key for runtime route cookie; falls back to launch/context signing keys.
+- `JEG_RUNTIME_TOKEN_TTL_SECONDS` (optional): TTL for runtime route cookie (default `900`).
+- `JUPYTERLAB_LOCAL_DEV_MODE=true` (optional, local dev): enables local-only runtime overrides and `http/ws` local route acceptance.
+- `JUPYTERLAB_LOCAL_RUNTIME_BASE_URL` (optional, local dev): direct single-node JupyterLab/Jupyter Server URL used instead of launcher. (`JEG_LOCAL_RUNTIME_BASE_URL` alias supported)
+- `JUPYTERLAB_LOCAL_RUNTIME_WS_URL` (optional, local dev): direct WebSocket URL for local runtime (`ws://...`). (`JEG_LOCAL_RUNTIME_WS_URL` alias supported)
+- `JUPYTERLAB_LOCAL_RUNTIME_TOKEN` (optional, local dev): token for local runtime. (`JEG_LOCAL_RUNTIME_TOKEN` alias supported)
+- `JUPYTERLAB_LOCAL_DOCKER_AUTOSTART` (optional, local dev): when `true`, `POST /api/workspace/jeg/launch` can run a local Docker Jupyter container. (`JEG_LOCAL_DOCKER_AUTOSTART` alias supported)
+- `JUPYTERLAB_LOCAL_DOCKER_IMAGE` (optional): Docker image for local autostart (`quay.io/jupyter/scipy-notebook:latest` by default). (`JEG_LOCAL_DOCKER_IMAGE` alias supported)
+- `JUPYTERLAB_LOCAL_DOCKER_CONTAINER_NAME` (optional): container name for local autostart (`gen3-jupyterlab-local` by default). (`JEG_LOCAL_DOCKER_CONTAINER_NAME` alias supported)
+- `JUPYTERLAB_LOCAL_DOCKER_PORT` (optional): host port mapping for local autostart (`18888` by default). (`JEG_LOCAL_DOCKER_PORT` alias supported)
 
 Data exfiltration controls in the Node.js proxy:
 
@@ -53,6 +65,36 @@ Encrypted ZeroMQ tunnel signaling:
 
 - `JEG_REQUIRE_ZMQ_TLS=true` adds `x-jeg-require-zmq-tls: true` on proxied calls so
   backend policy can require encrypted kernel channels.
+
+### Identity-aware runtime launch handshake
+
+`POST /api/workspace/jeg/launch` performs an authenticated runtime launch request and sets
+an httpOnly signed runtime cookie bound to Fence identity (`workspaceId` + `userId`).
+
+The launch request forwards:
+
+- workspace/user headers (`x-jeg-workspace-id`, `x-jeg-user-id`, `x-zero-trust-subject`)
+- launch profile headers (`x-jeg-launch-jwt`, `x-jeg-launch-mode`) when available
+- library attach intent (`x-jeg-selected-library-ids`, `x-jeg-attach-targets: jupyterlab-head,kernel`)
+- security headers (`x-jeg-require-zmq-tls` when enabled)
+- exfiltration controls (`x-jeg-data-exfil-policy`, `x-jeg-disable-export: true`)
+
+Launch payload includes:
+
+- `selectedLibraryIds`
+- `attachLibrariesToJupyterLabHead: true`
+- `attachLibrariesToKernel: true`
+
+Recommended launcher response contract (`POST JEG_LAUNCHER_URL`):
+
+- success JSON with either:
+  - `baseUrl`, `wsUrl`, optional `token`, or
+  - `connection.baseUrl`, `connection.wsUrl`, optional `connection.token`
+- both URLs should be per-user isolated runtime routes for the launched JupyterLab head unit.
+
+`GET /api/workspace/jeg/session` uses the signed runtime cookie to resolve the per-user
+`baseUrl/wsUrl/token` for JupyterLab routing. Runtime routes are accepted only when the
+signed identity matches the current Fence user/workspace.
 
 For IAP/Zero-Trust forwarding at the Node.js layer:
 
