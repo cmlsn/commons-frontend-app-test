@@ -2,7 +2,6 @@
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dns = require('dns');
-
 dns.setDefaultResultOrder('ipv4first');
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -17,7 +16,7 @@ const withMDX = require('@next/mdx')({
   },
 });
 
-// Next configuration with support for rewrting API to existing common services
+// Next configuration with support for rewriting API to existing common services
 const nextConfig = {
   output: 'standalone',
   serverRuntimeConfig: {
@@ -36,10 +35,11 @@ const nextConfig = {
     };
     return config;
   },
+
   async headers() {
     return [
       {
-        source: '/(.*)?', // Matches all pages
+        source: '/(.*)?',
         headers: [
           {
             key: 'X-Frame-Options',
@@ -47,6 +47,28 @@ const nextConfig = {
           },
         ],
       },
+    ];
+  },
+
+  async rewrites() {
+    const GEN3_TARGET =
+      process.env.NEXT_PUBLIC_GEN3_API_TARGET ||
+      'https://qa-vpodc.planx-pla.net';
+
+    return [
+      { source: '/_status', destination: `${GEN3_TARGET}/_status` },
+      { source: '/user/:path*', destination: `${GEN3_TARGET}/user/:path*` },
+      { source: '/guppy/:path*', destination: `${GEN3_TARGET}/guppy/:path*` },
+      { source: '/mds/:path*', destination: `${GEN3_TARGET}/mds/:path*` },
+      { source: '/ai-search/:path*', destination: `${GEN3_TARGET}/ai-search/:path*` },
+      { source: '/authz/:path*', destination: `${GEN3_TARGET}/authz/:path*` },
+      { source: '/lw-workspace/:path*', destination: `${GEN3_TARGET}/lw-workspace/:path*` },
+      { source: '/api/v0/submission/:path*', destination: `${GEN3_TARGET}/api/v0/submission/:path*` },
+      { source: '/wts/:path*', destination: `${GEN3_TARGET}/wts/:path*` },
+      { source: '/library/lists/:path*', destination: `${GEN3_TARGET}/library/lists/:path*` },
+      { source: '/jobs/:path*', destination: `${GEN3_TARGET}/jobs/:path*` },
+      { source: '/manifests/:path*', destination: `${GEN3_TARGET}/manifests/:path*` },
+      { source: '/requestor/:path*', destination: `${GEN3_TARGET}/requestor/:path*` },
     ];
   },
 };
