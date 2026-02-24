@@ -77,6 +77,10 @@ export default async function handler(
   }
 
   const proxyBaseUrl = getProxyBaseUrl(req);
+  const jegServerUrl = process.env.JEG_SERVER_URL?.trim() || '';
+  const derivedWsUrl = jegServerUrl
+    ? jegServerUrl.replace(/^http/i, 'ws').replace(/\/$/, '')
+    : proxyBaseUrl.replace(/^http/i, 'ws').replace(/\/$/, '');
   const token = process.env.JEG_CLIENT_TOKEN || undefined;
   const exportContext = await parseJupyterExportContextFromCookie(
     req.headers.cookie || '',
@@ -115,9 +119,7 @@ export default async function handler(
 
   return res.status(200).json({
     baseUrl: proxyBaseUrl,
-    wsUrl:
-      process.env.JEG_WS_URL ||
-      proxyBaseUrl.replace(/^http/i, 'ws').replace(/\/$/, ''),
+    wsUrl: process.env.JEG_WS_URL || derivedWsUrl,
     token,
     workspaceId: identityResult.identity.workspaceId,
     defaultPath: process.env.JEG_DEFAULT_NOTEBOOK_PATH || '/lab',

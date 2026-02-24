@@ -39,9 +39,10 @@ type GlobalNavTab = 'personal' | 'team' | 'demos';
 
 const DatalayerJupyterShell = dynamic(
   async () => {
-    const { JupyterLabApp, JupyterLab, loadJupyterConfig } = await import(
+    const { JupyterLabApp, loadJupyterConfig } = await import(
       '@datalayer/jupyter-react'
     );
+    const { PageConfig } = await import('@jupyterlab/coreutils');
 
     type JupyterShellProps = {
       collaborative?: boolean;
@@ -59,22 +60,17 @@ const DatalayerJupyterShell = dynamic(
         );
       }
 
-      // This is the critical fix. We are explicitly telling the library
-      // to use OUR backend for ALL services, including the event manager
-      // that was trying to connect to the external `datalayer.run` WebSocket.
+      const effectiveWsUrl = props.wsUrl || props.url.replace(/^http/, 'ws');
+
       loadJupyterConfig({
         collaborative: props.collaborative ?? false,
         jupyterServerUrl: props.url,
         jupyterServerToken: props.token || '',
-        // By providing a complete `serverSettings` object, we override any
-        // hardcoded defaults in the library.
-        serverSettings: {
-          baseUrl: props.url,
-          wsUrl: props.wsUrl || props.url.replace(/^http/, 'ws'),
-          token: props.token || '',
-          appendToken: true,
-        }
       });
+
+      PageConfig.setOption('baseUrl', props.url);
+      PageConfig.setOption('wsUrl', effectiveWsUrl);
+      PageConfig.setOption('token', props.token || '');
 
       return <JupyterLabApp height="100%" width="100%" />;
     };
@@ -117,7 +113,7 @@ const JupyterInfoPanel = () => {
           icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 01.75.75v.51a4.5 4.5 0 014.235 4.432l.015.058.015.057V10a2 2 0 01-1.995 1.995L13 12H7a2 2 0 01-2-2V7.75a4.5 4.5 0 014.492-4.492L10 3.25a.75.75 0 01.75-.75zM10 5a2.5 2.5 0 00-2.5 2.5V9h5V7.5A2.5 2.5 0 0010 5z" /></svg>}
           title="Pay-per-use & Cost-Efficient"
         >
-          Your workspace only consumes resources when you're actively running computations. Kernels automatically shut down when idle, ensuring you only pay for what you use.
+          Your workspace only consumes resources when you&apos;re actively running computations. Kernels automatically shut down when idle, ensuring you only pay for what you use.
         </Feature>
 
         <Feature
@@ -138,7 +134,7 @@ const JupyterInfoPanel = () => {
           icon={<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-6.5 6.5-3.536-3.536 6.5-6.5z" /></svg>}
           title="Pre-release Data Access"
         >
-          Seamlessly switch to 'Team Mode' to access and analyze pre-release datasets in a controlled and secure environment before they are made public.
+          Seamlessly switch to &apos;Team Mode&apos; to access and analyze pre-release datasets in a controlled and secure environment before they are made public.
         </Feature>
 
         <Feature

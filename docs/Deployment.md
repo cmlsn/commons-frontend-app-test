@@ -37,7 +37,7 @@ Set these runtime environment variables in your deployment:
 - `JEG_WORKSPACE_CLAIM` (optional): Fence token claim to map user identity to workspace.
 - `JEG_WORKSPACE_PREFIX` (optional): Prefix for generated workspace IDs (`workspace` by default).
 - `JEG_DEFAULT_NOTEBOOK_PATH` (optional): Initial Jupyter path (`/lab` by default).
-- `JEG_WS_URL` (optional): Explicit WebSocket URL if not derived from proxy URL.
+- `JEG_WS_URL` (optional): Explicit WebSocket URL; if omitted, derived from `JEG_SERVER_URL`.
 - `JEG_CLIENT_TOKEN` (optional): Token exposed to client-side Jupyter shell if required.
 - `JEG_ENFORCE_ENCRYPTED_TRANSPORT` (optional): Defaults to `true`; requires `https`/`wss`.
 
