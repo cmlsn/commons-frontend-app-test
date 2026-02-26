@@ -73,13 +73,18 @@ export async function fetchSharedLibrariesForUser(
 
   const body = (await response.json()) as { libraries?: SharedLibraryRecord[] };
   const libraries = Array.isArray(body.libraries) ? body.libraries : [];
+  const normalizedUserId = identity.userId.toLowerCase();
 
   // SECURITY: Defense-in-depth verification
   // Backend should already filter, but verify client-side as additional safety layer
   const authorizedLibraries = libraries.filter((lib) => {
-    const isOwner = lib.ownerUserId === identity.userId;
+    const ownerUserId = typeof lib.ownerUserId === 'string' ? lib.ownerUserId.toLowerCase() : '';
+    const isOwner = ownerUserId === normalizedUserId;
     const isSharedWith = Array.isArray(lib.sharedWithUsers) &&
-                         lib.sharedWithUsers.includes(identity.userId);
+                         lib.sharedWithUsers.some(
+                           (userId) =>
+                             typeof userId === 'string' && userId.toLowerCase() === normalizedUserId,
+                         );
 
     if (!isOwner && !isSharedWith) {
       // Log security issue - backend returned unauthorized library
@@ -204,9 +209,9 @@ export async function publishUserLibraryItem(
       ...buildIapHeaders(),
     },
     body: JSON.stringify({
+      ...payload,
       ownerUserId: identity.userId,
       workspaceId: identity.workspaceId,
-      ...payload,
     }),
   });
 
