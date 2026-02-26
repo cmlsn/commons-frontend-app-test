@@ -159,6 +159,37 @@ export default async function handler(
     });
   }
 
+  // SECURITY: Verify ownership before allowing share operation
+  let userLibraries;
+  try {
+    const { fetchSharedLibrariesForUser } = await import(
+      '@/features/jeg-workspace/lib/sharedLibraries'
+    );
+    userLibraries = await fetchSharedLibrariesForUser(
+      identityResult.identity,
+      accessToken,
+    );
+  } catch (error: any) {
+    return res.status(502).json({
+      error: error?.message || 'Unable to verify library ownership.',
+    });
+  }
+
+  const libraryToShare = userLibraries.find((lib) => lib.id === body.libraryId);
+
+  if (!libraryToShare) {
+    return res.status(404).json({
+      error: 'Library not found or you do not have access to it.',
+    });
+  }
+
+  if (libraryToShare.ownerUserId !== identityResult.identity.userId) {
+    return res.status(403).json({
+      error: 'Only the library owner can modify sharing permissions.',
+      libraryId: body.libraryId,
+    });
+  }
+
   if (sanitizedSharedWithUsers.length > 0) {
     try {
       const invalidUsernames = await findInvalidFenceUsernames(

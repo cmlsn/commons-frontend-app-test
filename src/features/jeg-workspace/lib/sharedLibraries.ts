@@ -72,7 +72,37 @@ export async function fetchSharedLibrariesForUser(
   }
 
   const body = (await response.json()) as { libraries?: SharedLibraryRecord[] };
-  return Array.isArray(body.libraries) ? body.libraries : [];
+  const libraries = Array.isArray(body.libraries) ? body.libraries : [];
+
+  // SECURITY: Defense-in-depth verification
+  // Backend should already filter, but verify client-side as additional safety layer
+  const authorizedLibraries = libraries.filter((lib) => {
+    const isOwner = lib.ownerUserId === identity.userId;
+    const isSharedWith = Array.isArray(lib.sharedWithUsers) &&
+                         lib.sharedWithUsers.includes(identity.userId);
+
+    if (!isOwner && !isSharedWith) {
+      // Log security issue - backend returned unauthorized library
+      console.error(
+        `[SECURITY] Backend returned unauthorized library: ${lib.id}. ` +
+        `Owner: ${lib.ownerUserId}, User: ${identity.userId}, ` +
+        `Shared: ${JSON.stringify(lib.sharedWithUsers)}`
+      );
+      return false;
+    }
+
+    return true;
+  });
+
+  // If we filtered out libraries, log the discrepancy
+  if (authorizedLibraries.length !== libraries.length) {
+    console.warn(
+      `[SECURITY] Filtered ${libraries.length - authorizedLibraries.length} ` +
+      `unauthorized libraries from backend response. This indicates a backend security issue.`
+    );
+  }
+
+  return authorizedLibraries;
 }
 
 export async function shareLibraryWithUsers(
