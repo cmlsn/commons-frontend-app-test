@@ -13,6 +13,7 @@ import {
   parseJupyterExportContextFromCookie,
   resolveWorkspaceIdentityFromCookie,
 } from '@/features/jeg-workspace/lib/jegSecurity';
+import { COMPUTE_TIER_SPECS } from '@/features/jeg-workspace/lib/computeTierSpecs';
 
 export const config = {
   api: {
@@ -21,18 +22,6 @@ export const config = {
 };
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-
-type ComputeTierSpec = {
-  cpu: string;
-  memory: string;
-  gpu: string;
-};
-
-const COMPUTE_TIER_SPECS: Record<string, ComputeTierSpec> = {
-  'standard-2cpu': { cpu: '2', memory: '8Gi', gpu: '0' },
-  'large-8cpu': { cpu: '8', memory: '32Gi', gpu: '0' },
-  'gpu-1x': { cpu: '8', memory: '32Gi', gpu: '1' },
-};
 
 const POLLUTION_BLOCKED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 

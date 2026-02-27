@@ -7,22 +7,18 @@ import {
   resolveWorkspaceIdentityFromCookie,
   type ComputeTier,
 } from '@/features/jeg-workspace/lib/jegSecurity';
+import {
+  COMPUTE_TIER_KEYS,
+  COMPUTE_TIER_SPECS,
+} from '@/features/jeg-workspace/lib/computeTierSpecs';
 
 type SetComputeTierBody = {
   tier?: unknown;
 };
 
-const ALLOWED_TIERS: readonly ComputeTier[] = [
-  'standard-2cpu',
-  'large-8cpu',
-  'gpu-1x',
-] as const;
-
 function isComputeTier(value: unknown): value is ComputeTier {
-  return (
-    typeof value === 'string' &&
-    (ALLOWED_TIERS as readonly string[]).includes(value)
-  );
+  if (typeof value !== 'string') return false;
+  return Object.prototype.hasOwnProperty.call(COMPUTE_TIER_SPECS, value);
 }
 
 export default async function handler(
@@ -59,7 +55,7 @@ export default async function handler(
   if (!isComputeTier(body.tier)) {
     return res.status(400).json({
       error: 'Invalid compute tier.',
-      allowedTiers: ALLOWED_TIERS,
+      allowedTiers: COMPUTE_TIER_KEYS,
     });
   }
 
