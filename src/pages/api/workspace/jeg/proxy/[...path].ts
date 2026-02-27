@@ -6,6 +6,7 @@ import {
   buildSecurityHeaders,
   buildIapHeaders,
   buildWorkspaceHeaders,
+  type ComputeTier,
   evaluateExfiltrationPolicy,
   getDataExfiltrationPolicy,
   parseJegComputeTierFromCookie,
@@ -53,7 +54,7 @@ function safeDeepClone(value: unknown): unknown {
 async function getSessionComputeTier(
   req: NextApiRequest,
   identity: Parameters<typeof parseJegComputeTierFromCookie>[1],
-): Promise<string | null> {
+): Promise<ComputeTier | null> {
   const computeTier = await parseJegComputeTierFromCookie(
     req.headers.cookie || '',
     identity,
@@ -63,7 +64,7 @@ async function getSessionComputeTier(
 
 function injectKernelComputeTierEnv(
   body: Buffer | undefined,
-  computeTier: string,
+  computeTier: ComputeTier,
 ): Buffer {
   let parsed: unknown;
   try {
@@ -77,9 +78,6 @@ function injectKernelComputeTierEnv(
   }
 
   const tierSpec = COMPUTE_TIER_SPECS[computeTier];
-  if (!tierSpec) {
-    throw new Error('Unsupported compute tier selection.');
-  }
 
   const cloned = safeDeepClone(parsed) as Record<string, unknown>;
   const existingEnv = isPlainObject(cloned.env)
@@ -105,21 +103,115 @@ function asPathArray(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-function buildTargetUrl(req: NextApiRequest, baseUrl: string): URL {
-  const pathParts = asPathArray(req.query.path);
-  const path = pathParts.map(encodeURIComponent).join('/');
-  const target = new URL(`${baseUrl.replace(/\/$/, '')}/${path}`);
+function normalizeRuntimeProxyPath(path: string): string {
+  let normalizedPath = path;
 
-  for (const [key, rawValue] of Object.entries(req.query)) {
-    if (key === 'path') continue;
-    if (Array.isArray(rawValue)) {
-      for (const item of rawValue) target.searchParams.append(key, item);
-    } else if (typeof rawValue === 'string') {
-      target.searchParams.append(key, rawValue);
+  if (normalizedPath === '/api/jupyter-server/api') {
+    normalizedPath = '/api';
+  } else if (normalizedPath.startsWith('/api/jupyter-server/api/')) {
+    normalizedPath = normalizedPath.replace(
+      /^\/api\/jupyter-server\/api/,
+      '/api',
+    );
+  } else if (normalizedPath === '/api/jupyter-server/lab/api') {
+    normalizedPath = '/lab/api';
+  } else if (normalizedPath.startsWith('/api/jupyter-server/lab/api/')) {
+    normalizedPath = normalizedPath.replace(
+      /^\/api\/jupyter-server\/lab\/api/,
+      '/lab/api',
+    );
+  }
+
+  if (normalizedPath === '/api/settings' || normalizedPath.startsWith('/api/settings/')) {
+    normalizedPath = normalizedPath.replace(/^\/api\/settings/, '/lab/api/settings');
+  }
+
+  if (normalizedPath === '/api/themes' || normalizedPath.startsWith('/api/themes/')) {
+    normalizedPath = normalizedPath.replace(/^\/api\/themes/, '/lab/api/themes');
+  }
+
+  if (
+    normalizedPath === '/api/translations'
+    || normalizedPath.startsWith('/api/translations/')
+  ) {
+    normalizedPath = normalizedPath.replace(
+      /^\/api\/translations/,
+      '/lab/api/translations',
+    );
+  }
+
+  if (
+    normalizedPath === '/api/workspaces'
+    || normalizedPath.startsWith('/api/workspaces/')
+  ) {
+    normalizedPath = normalizedPath.replace(
+      /^\/api\/workspaces/,
+      '/lab/api/workspaces',
+    );
+  }
+
+  return normalizedPath;
+}
+
+function isSettingsPath(path: string): boolean {
+  return path === '/api/settings'
+    || path.startsWith('/api/settings/')
+    || path === '/lab/api/settings'
+    || path.startsWith('/lab/api/settings/');
+}
+
+function isKernelspecsPath(path: string): boolean {
+  return path === '/api/kernelspecs'
+    || path.startsWith('/api/kernelspecs/')
+    || path === '/lab/api/kernelspecs'
+    || path.startsWith('/lab/api/kernelspecs/');
+}
+
+function rewriteKernelspecAssetUrls(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const record = payload as Record<string, unknown>;
+  const kernelspecsValue = record.kernelspecs;
+  if (!kernelspecsValue || typeof kernelspecsValue !== 'object') return payload;
+
+  const kernelspecs = kernelspecsValue as Record<string, unknown>;
+  for (const specKey of Object.keys(kernelspecs)) {
+    const specValue = kernelspecs[specKey];
+    if (!specValue || typeof specValue !== 'object') continue;
+
+    const spec = specValue as Record<string, unknown>;
+    const resourcesValue = spec.resources;
+    if (!resourcesValue || typeof resourcesValue !== 'object') continue;
+
+    const resources = resourcesValue as Record<string, unknown>;
+    for (const resourceKey of Object.keys(resources)) {
+      const resourceValue = resources[resourceKey];
+      if (typeof resourceValue !== 'string') continue;
+      if (!resourceValue.startsWith('/kernelspecs/')) continue;
+
+      resources[resourceKey] = `/api/workspace/jeg/proxy${resourceValue}`;
     }
   }
 
-  return target;
+  return record;
+}
+
+function alternateSettingsPath(path: string): string {
+  if (path === '/lab/api/settings' || path.startsWith('/lab/api/settings/')) {
+    return path.replace(/^\/lab\/api\/settings/, '/api/settings');
+  }
+  if (path === '/api/settings' || path.startsWith('/api/settings/')) {
+    return path.replace(/^\/api\/settings/, '/lab/api/settings');
+  }
+  return path;
+}
+
+function buildTargetUrl(
+  baseUrl: string,
+  normalizedPath: string,
+  search: string,
+): URL {
+  return new URL(`${baseUrl.replace(/\/$/, '')}${normalizedPath}${search}`);
 }
 
 async function readRequestBody(req: NextApiRequest): Promise<Buffer | undefined> {
@@ -195,19 +287,11 @@ export default async function handler(
       .json({ error: identityResult.error });
   }
 
-  const requestedPath = `/${asPathArray(req.query.path).join('/')}`;
-  const queryEntries = Object.entries(req.query).filter(([key]) => key !== 'path');
-  const queryParams = new URLSearchParams();
-  for (const [key, value] of queryEntries) {
-    if (Array.isArray(value)) {
-      for (const item of value) queryParams.append(key, item);
-    } else if (typeof value === 'string') {
-      queryParams.append(key, value);
-    }
-  }
-  const requestedPathWithQuery = queryParams.toString()
-    ? `${requestedPath}?${queryParams.toString()}`
-    : requestedPath;
+  const incomingUrl = new URL(req.url || '/', 'http://localhost');
+  const requestedPath =
+    incomingUrl.pathname.replace(/^\/api\/workspace\/jeg\/proxy/, '') || '/';
+  const normalizedRequestedPath = normalizeRuntimeProxyPath(requestedPath);
+  const requestedPathWithQuery = `${normalizedRequestedPath}${incomingUrl.search}`;
   const policyDecision = evaluateExfiltrationPolicy(
     requestedPathWithQuery,
     method,
@@ -220,11 +304,15 @@ export default async function handler(
     });
   }
 
-  const target = buildTargetUrl(req, jegServerUrl);
+  const target = buildTargetUrl(
+    jegServerUrl,
+    normalizedRequestedPath,
+    incomingUrl.search,
+  );
   const requestBody = await readRequestBody(req);
   const contentType = req.headers['content-type'] as string | undefined;
-  const isKernelLaunch = isKernelLaunchRequest(requestedPath, method);
-  let computeTier: string | null = null;
+  const isKernelLaunch = isKernelLaunchRequest(normalizedRequestedPath, method);
+  let computeTier: ComputeTier | null = null;
 
   if (isKernelLaunch) {
     computeTier = await getSessionComputeTier(req, identityResult.identity);
@@ -243,8 +331,115 @@ export default async function handler(
       req.headers.cookie || '',
       identityResult.identity,
     );
+
+    const upstreamHeaders: Record<string, string> = {};
+    if (contentType) {
+      upstreamHeaders['content-type'] = contentType;
+    }
+    if (req.headers.accept) {
+      upstreamHeaders.accept = String(req.headers.accept);
+    }
+    if (incomingToken) {
+      upstreamHeaders.Authorization = `Bearer ${incomingToken}`;
+    }
+    for (const [key, value] of Object.entries(
+      buildWorkspaceHeaders(identityResult.identity),
+    )) {
+      upstreamHeaders[key] = value;
+    }
+    if (exportContext) {
+      upstreamHeaders['x-jeg-context-jwt'] = exportContext.token;
+    }
+    if (launchProfile) {
+      upstreamHeaders['x-jeg-launch-jwt'] = launchProfile.token;
+      upstreamHeaders['x-jeg-launch-mode'] = launchProfile.profile.mode;
+    }
+    for (const [key, value] of Object.entries(buildSecurityHeaders())) {
+      upstreamHeaders[key] = value;
+    }
+    for (const [key, value] of Object.entries(buildIapHeaders())) {
+      upstreamHeaders[key] = value;
+    }
+
+    if ((method === 'GET' || method === 'HEAD') && isSettingsPath(normalizedRequestedPath)) {
+      const primarySettingsTarget = buildTargetUrl(
+        jegServerUrl,
+        normalizedRequestedPath,
+        incomingUrl.search,
+      );
+      const fallbackSettingsPath = alternateSettingsPath(normalizedRequestedPath);
+      const fallbackSettingsTarget = buildTargetUrl(
+        jegServerUrl,
+        fallbackSettingsPath,
+        incomingUrl.search,
+      );
+
+      let upstreamResponse = await fetch(primarySettingsTarget.toString(), {
+        method,
+        headers: upstreamHeaders,
+      });
+
+      if (upstreamResponse.status === 404 && fallbackSettingsPath !== normalizedRequestedPath) {
+        upstreamResponse = await fetch(fallbackSettingsTarget.toString(), {
+          method,
+          headers: upstreamHeaders,
+        });
+      }
+
+      res.status(upstreamResponse.status);
+      const responseContentType = upstreamResponse.headers.get('content-type');
+      if (responseContentType) {
+        res.setHeader('content-type', responseContentType);
+      }
+
+      if (method === 'HEAD') {
+        res.end();
+        return;
+      }
+
+      const responseBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      res.send(responseBody);
+      return;
+    }
+
+    if ((method === 'GET' || method === 'HEAD') && isKernelspecsPath(normalizedRequestedPath)) {
+      const kernelspecsTarget = buildTargetUrl(
+        jegServerUrl,
+        normalizedRequestedPath,
+        incomingUrl.search,
+      );
+
+      const upstreamResponse = await fetch(kernelspecsTarget.toString(), {
+        method,
+        headers: upstreamHeaders,
+      });
+
+      res.status(upstreamResponse.status);
+      const responseContentType = upstreamResponse.headers.get('content-type');
+      if (responseContentType) {
+        res.setHeader('content-type', responseContentType);
+      }
+
+      if (method === 'HEAD') {
+        res.end();
+        return;
+      }
+
+      const shouldRewriteJson = (responseContentType || '').includes('application/json');
+      if (!shouldRewriteJson) {
+        const passthroughBody = Buffer.from(await upstreamResponse.arrayBuffer());
+        res.send(passthroughBody);
+        return;
+      }
+
+      const payload = await upstreamResponse.json().catch(() => null);
+      const rewritten = rewriteKernelspecAssetUrls(payload);
+      res.send(rewritten);
+      return;
+    }
+
     const bodyWithLaunch = maybeInjectLaunchProfile(
-      requestedPath,
+      normalizedRequestedPath,
       method,
       contentType,
       requestBody,
@@ -258,31 +453,7 @@ export default async function handler(
 
     await new Promise<void>((resolve) => {
       proxy.once('proxyReq', (proxyReq: any) => {
-        if (contentType) {
-          proxyReq.setHeader('content-type', contentType);
-        }
-        if (req.headers.accept) {
-          proxyReq.setHeader('accept', req.headers.accept as string);
-        }
-        if (incomingToken) {
-          proxyReq.setHeader('Authorization', `Bearer ${incomingToken}`);
-        }
-        for (const [key, value] of Object.entries(
-          buildWorkspaceHeaders(identityResult.identity),
-        )) {
-          proxyReq.setHeader(key, value);
-        }
-        if (exportContext) {
-          proxyReq.setHeader('x-jeg-context-jwt', exportContext.token);
-        }
-        if (launchProfile) {
-          proxyReq.setHeader('x-jeg-launch-jwt', launchProfile.token);
-          proxyReq.setHeader('x-jeg-launch-mode', launchProfile.profile.mode);
-        }
-        for (const [key, value] of Object.entries(buildSecurityHeaders())) {
-          proxyReq.setHeader(key, value);
-        }
-        for (const [key, value] of Object.entries(buildIapHeaders())) {
+        for (const [key, value] of Object.entries(upstreamHeaders)) {
           proxyReq.setHeader(key, value);
         }
 

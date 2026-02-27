@@ -3,7 +3,6 @@ import { serialize } from 'cookie';
 import {
   createJegComputeTierToken,
   getJegComputeCookieName,
-  parseJegRuntimeRouteFromCookie,
   resolveWorkspaceIdentityFromCookie,
   type ComputeTier,
 } from '@/features/jeg-workspace/lib/jegSecurity';
@@ -38,17 +37,6 @@ export default async function handler(
     return res
       .status(identityResult.statusCode)
       .json({ error: identityResult.error });
-  }
-
-  const runtimeSession = await parseJegRuntimeRouteFromCookie(
-    req.headers.cookie || '',
-    identityResult.identity,
-  );
-
-  if (!runtimeSession?.route) {
-    return res.status(409).json({
-      error: 'Active workspace session is required.',
-    });
   }
 
   const body = (req.body || {}) as SetComputeTierBody;

@@ -62,15 +62,187 @@ const DatalayerJupyterShell = dynamic(
         );
       }
 
-      const effectiveWsUrl = props.wsUrl || props.url.replace(/^http/, 'ws');
+      const patchWindow = window as typeof window & {
+        __jegCrossOriginGuardPatched?: boolean;
+        __jegCrossOriginGuardOriginalFetch?: typeof window.fetch;
+      };
+
+      const proxyBasePath = new URL(props.url, window.location.origin)
+        .pathname
+        .replace(/\/+$/, '');
+
+      if (!patchWindow.__jegCrossOriginGuardPatched && typeof window.fetch === 'function') {
+        const originalFetch = window.fetch.bind(window);
+        patchWindow.__jegCrossOriginGuardOriginalFetch = originalFetch;
+
+        const mapToJupyterApiTail = (pathname: string): string | null => {
+          const lower = pathname.toLowerCase();
+
+          const nestedJupyterApiMarker = '/api/jupyter-server/api';
+          const nestedMarkerIndex = lower.indexOf(nestedJupyterApiMarker);
+          if (nestedMarkerIndex >= 0) {
+            const nestedTail = pathname.slice(
+              nestedMarkerIndex + '/api/jupyter-server'.length,
+            );
+            return nestedTail.startsWith('/api') ? nestedTail : `/api${nestedTail}`;
+          }
+
+          const labApiIndex = lower.indexOf('/lab/api/');
+          if (labApiIndex >= 0) {
+            return pathname.slice(labApiIndex);
+          }
+
+          if (lower.endsWith('/api')) {
+            const apiIndex = lower.lastIndexOf('/api');
+            if (apiIndex >= 0) return pathname.slice(apiIndex);
+          }
+
+          const apiIndex = lower.indexOf('/api/');
+          if (apiIndex >= 0) {
+            return pathname.slice(apiIndex);
+          }
+
+          const barePrefixMap: Array<{ prefix: string; mapped: string }> = [
+            { prefix: '/kernelspecs', mapped: '/api/kernelspecs' },
+            { prefix: '/me', mapped: '/api/me' },
+            { prefix: '/sessions', mapped: '/api/sessions' },
+            { prefix: '/kernels', mapped: '/api/kernels' },
+            { prefix: '/settings', mapped: '/api/settings' },
+            { prefix: '/workspaces', mapped: '/api/workspaces' },
+            { prefix: '/contents', mapped: '/api/contents' },
+            { prefix: '/terminals', mapped: '/api/terminals' },
+            { prefix: '/config', mapped: '/api/config' },
+            { prefix: '/themes', mapped: '/api/themes' },
+            { prefix: '/translations', mapped: '/api/translations' },
+          ];
+
+          for (const { prefix, mapped } of barePrefixMap) {
+            if (lower === prefix || lower.startsWith(`${prefix}/`)) {
+              return `${mapped}${pathname.slice(prefix.length)}`;
+            }
+          }
+
+          return null;
+        };
+
+        window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+          const rawUrl =
+            typeof input === 'string'
+              ? input
+              : input instanceof URL
+                ? input.toString()
+                : input.url;
+
+          let parsed: URL;
+          try {
+            parsed = new URL(rawUrl, window.location.origin);
+          } catch {
+            return originalFetch(input, init);
+          }
+
+          const sameOrigin = parsed.origin === window.location.origin;
+          if (sameOrigin) {
+            const pathname = parsed.pathname;
+            if (
+              pathname.startsWith('/api/workspace/jeg/')
+              || pathname.startsWith(proxyBasePath)
+            ) {
+              return originalFetch(input, init);
+            }
+
+            const sameOriginTail = mapToJupyterApiTail(pathname);
+            const shouldRewriteSameOrigin = Boolean(
+              sameOriginTail
+                && (
+                  pathname.startsWith('/kernelspecs')
+                  || pathname.startsWith('/themes')
+                  || pathname.startsWith('/translations')
+                  || pathname.startsWith('/workspaces')
+                  || pathname.startsWith('/api/workspaces')
+                ),
+            );
+
+            if (!shouldRewriteSameOrigin) {
+              return originalFetch(input, init);
+            }
+          }
+
+          const apiTail = mapToJupyterApiTail(parsed.pathname);
+          if (!apiTail) {
+            return originalFetch(input, init);
+          }
+
+          const canonicalProxyBasePath = '/api/workspace/jeg/proxy';
+          const mappedUrl = `${proxyBasePath}${apiTail}${parsed.search}`;
+          const method = init?.method || (input instanceof Request ? input.method : undefined);
+          const requestInit: RequestInit = {
+            ...init,
+            method,
+            headers: init?.headers || (input instanceof Request ? input.headers : undefined),
+            body: init?.body || (input instanceof Request ? input.body : undefined),
+            credentials: 'include',
+          };
+
+          if (method?.toUpperCase() === 'GET' || method?.toUpperCase() === 'HEAD') {
+            delete requestInit.body;
+          }
+
+          const alternateLabApiUrl = (url: string): string | null => {
+            const updated = url.replace('/proxy/api', '/proxy/lab/api');
+            return updated === url ? null : updated;
+          };
+
+          const shouldPreferLabApi =
+            apiTail.startsWith('/api/settings')
+            || apiTail.startsWith('/api/themes')
+            || apiTail.startsWith('/api/translations');
+
+          const primaryLabApiCandidate = alternateLabApiUrl(mappedUrl);
+          const canonicalMappedUrl = `${canonicalProxyBasePath}${apiTail}${parsed.search}`;
+          const canonicalLabApiCandidate = alternateLabApiUrl(canonicalMappedUrl);
+
+          const candidateUrls = [
+            shouldPreferLabApi ? primaryLabApiCandidate : mappedUrl,
+            shouldPreferLabApi ? mappedUrl : primaryLabApiCandidate,
+            shouldPreferLabApi ? canonicalLabApiCandidate : canonicalMappedUrl,
+            shouldPreferLabApi ? canonicalMappedUrl : canonicalLabApiCandidate,
+          ].filter((value): value is string => Boolean(value));
+
+          for (const candidate of [...new Set(candidateUrls)]) {
+            const response = await originalFetch(candidate, requestInit);
+            if (response.status !== 404) {
+              return response;
+            }
+          }
+
+          console.warn('[JEG cross-origin map 404]', {
+            rawUrl,
+            proxyBasePath,
+            apiTail,
+            attempts: [...new Set(candidateUrls)],
+          });
+
+          return originalFetch(mappedUrl, requestInit);
+        };
+
+        patchWindow.__jegCrossOriginGuardPatched = true;
+      }
+
+      const effectiveHttpUrl = `${new URL(props.url, window.location.origin)
+        .toString()
+        .replace(/\/+$/, '')}/`;
+      const effectiveWsUrl = `${new URL(props.wsUrl || props.url, window.location.origin)
+        .toString()
+        .replace(/^http/i, 'ws')
+        .replace(/\/+$/, '')}/`;
 
       loadJupyterConfig({
         collaborative: props.collaborative ?? false,
-        jupyterServerUrl: props.url,
+        jupyterServerUrl: effectiveHttpUrl,
         jupyterServerToken: props.token || '',
       });
 
-      PageConfig.setOption('baseUrl', props.url);
+      PageConfig.setOption('baseUrl', effectiveHttpUrl);
       PageConfig.setOption('wsUrl', effectiveWsUrl);
       PageConfig.setOption('token', props.token || '');
 
@@ -180,52 +352,7 @@ const WorkspaceJEGPage = ({
   >(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.fetch !== 'function') {
-      return;
-    }
-
-    const originalFetch = window.fetch.bind(window);
-
-    const interceptedFetch: typeof window.fetch = async (input, init) => {
-      const response = await originalFetch(input, init);
-
-      try {
-        const urlValue =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
-        const normalizedPathname = new URL(urlValue, window.location.origin).pathname;
-
-        if ((response.status === 402 || response.status === 428) && normalizedPathname.endsWith('/api/kernels')) {
-          if (input instanceof Request) {
-            pendingKernelLaunchRef.current = { input: input.clone() };
-          } else {
-            pendingKernelLaunchRef.current = { input, init };
-          }
-          setComputeTierError(null);
-          setShowComputeModal(true);
-          const responseBody = JSON.stringify({ message: 'Compute tier selection required' });
-          return new Response(responseBody, {
-            status: 200,
-            headers: {
-              'content-type': 'application/json',
-            },
-          });
-        }
-      } catch {
-        return response;
-      }
-
-      return response;
-    };
-
-    window.fetch = interceptedFetch;
-
-    return () => {
-      window.fetch = originalFetch;
-    };
+    return;
   }, []);
 
   const handleComputeTierConfirm = async (tier: ComputeTier) => {

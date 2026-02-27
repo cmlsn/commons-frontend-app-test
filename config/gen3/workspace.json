@@ -1,4 +1,5 @@
 {
+	"requirePayModel": false,
 	"apps": [
 		{
 			"name": "Secure Jupyter (JEG)",
