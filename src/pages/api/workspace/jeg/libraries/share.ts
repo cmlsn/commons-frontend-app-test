@@ -6,7 +6,11 @@ import {
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
 } from '@/features/jeg-workspace/lib/jegSecurity';
-import { shareLibraryWithUsers } from '@/features/jeg-workspace/lib/sharedLibraries';
+import {
+  fetchSharedLibrariesForUser,
+  shareLibraryWithUsers,
+  type SharedLibraryRecord,
+} from '@/features/jeg-workspace/lib/sharedLibraries';
 
 type ShareBody = {
   libraryId?: string;
@@ -29,6 +33,19 @@ function sanitizeSharedWithUsers(sharedWithUsers: unknown): string[] {
         .filter((item) => item.length > 0),
     ),
   );
+}
+
+function normalizeIdentityUserId(userId: string | undefined): string {
+  return (userId || '').trim().toLowerCase();
+}
+
+async function resolveLibraryForOwnershipVerification(
+  libraryId: string,
+  accessToken: string | null,
+  identity: Parameters<typeof fetchSharedLibrariesForUser>[0],
+): Promise<SharedLibraryRecord | undefined> {
+  const userLibraries = await fetchSharedLibrariesForUser(identity, accessToken);
+  return userLibraries.find((lib) => lib.id === libraryId);
 }
 
 async function validateFenceIdentityUsername(
@@ -160,14 +177,12 @@ export default async function handler(
   }
 
   // SECURITY: Verify ownership before allowing share operation
-  let userLibraries;
+  let libraryToShare;
   try {
-    const { fetchSharedLibrariesForUser } = await import(
-      '@/features/jeg-workspace/lib/sharedLibraries'
-    );
-    userLibraries = await fetchSharedLibrariesForUser(
-      identityResult.identity,
+    libraryToShare = await resolveLibraryForOwnershipVerification(
+      body.libraryId,
       accessToken,
+      identityResult.identity,
     );
   } catch (error: any) {
     return res.status(502).json({
@@ -175,15 +190,15 @@ export default async function handler(
     });
   }
 
-  const libraryToShare = userLibraries.find((lib) => lib.id === body.libraryId);
-
   if (!libraryToShare) {
     return res.status(404).json({
       error: 'Library not found or you do not have access to it.',
     });
   }
 
-  if (libraryToShare.ownerUserId !== identityResult.identity.userId) {
+  const normalizedOwnerUserId = normalizeIdentityUserId(libraryToShare.ownerUserId);
+  const normalizedRequesterUserId = normalizeIdentityUserId(identityResult.identity.userId);
+  if (normalizedOwnerUserId !== normalizedRequesterUserId) {
     return res.status(403).json({
       error: 'Only the library owner can modify sharing permissions.',
       libraryId: body.libraryId,

@@ -25,6 +25,7 @@ const JEG_SERVER_URL_ENV = 'JEG_SERVER_URL';
 const JEG_CONTEXT_COOKIE_NAME = 'jeg_context';
 const JEG_LAUNCH_COOKIE_NAME = 'jeg_launch';
 const JEG_RUNTIME_COOKIE_NAME = 'jeg_runtime';
+const JEG_COMPUTE_COOKIE_NAME = 'jeg_compute';
 
 export function isJegPreviewModeEnabled(): boolean {
   const previewEnabled = process.env.JEG_UI_PREVIEW_MODE === 'true';
@@ -64,6 +65,13 @@ export type JupyterExportContext = JupyterExportContextPayload & {
 };
 
 export type JegLaunchMode = 'personal' | 'pre-release';
+export type ComputeTier = 'standard-2cpu' | 'large-8cpu' | 'gpu-1x';
+
+const ALLOWED_COMPUTE_TIERS: ComputeTier[] = [
+  'standard-2cpu',
+  'large-8cpu',
+  'gpu-1x',
+];
 
 type JegLaunchProfilePayload = {
   mode: JegLaunchMode;
@@ -85,6 +93,15 @@ type JegRuntimeRoutePayload = {
 };
 
 export type JegRuntimeRoute = JegRuntimeRoutePayload & {
+  workspaceId: string;
+  userId: string;
+};
+
+type JegComputeTierPayload = {
+  computeTier: ComputeTier;
+};
+
+export type JegComputeTier = JegComputeTierPayload & {
   workspaceId: string;
   userId: string;
 };
@@ -346,6 +363,12 @@ function getRuntimeSigningKey(): Uint8Array | null {
   return getLaunchSigningKey();
 }
 
+function getComputeSigningKey(): Uint8Array | null {
+  const explicitComputeKey = process.env.JEG_COMPUTE_SIGNING_KEY?.trim();
+  if (explicitComputeKey) return new TextEncoder().encode(explicitComputeKey);
+  return getRuntimeSigningKey();
+}
+
 function getRuntimeAllowedSchemes() {
   if (
     process.env.JUPYTERLAB_LOCAL_DEV_MODE === 'true' ||
@@ -373,6 +396,14 @@ export function getJegLaunchCookieName() {
 
 export function getJegRuntimeCookieName() {
   return JEG_RUNTIME_COOKIE_NAME;
+}
+
+export function getJegComputeCookieName() {
+  return JEG_COMPUTE_COOKIE_NAME;
+}
+
+export function getAllowedComputeTiers(): ComputeTier[] {
+  return [...ALLOWED_COMPUTE_TIERS];
 }
 
 export async function createJupyterExportContextToken(
@@ -626,6 +657,82 @@ export async function parseJegRuntimeRouteFromCookie(
         workspaceId: payload.workspaceId,
         userId: payload.userId,
       } satisfies JegRuntimeRoute,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function createJegComputeTierToken(
+  identity: WorkspaceIdentity,
+  payload: JegComputeTierPayload,
+) {
+  const key = getComputeSigningKey();
+  if (!key) {
+    throw new Error(
+      'JEG_COMPUTE_SIGNING_KEY, JEG_RUNTIME_SIGNING_KEY, JEG_LAUNCH_SIGNING_KEY, or JEG_CONTEXT_SIGNING_KEY must be configured for compute tier control.',
+    );
+  }
+
+  if (!ALLOWED_COMPUTE_TIERS.includes(payload.computeTier)) {
+    throw new Error('Invalid compute tier.');
+  }
+
+  const maxAgeSeconds = Number(process.env.JEG_COMPUTE_TOKEN_TTL_SECONDS || '900');
+  const safeMaxAge = Number.isFinite(maxAgeSeconds) && maxAgeSeconds > 0
+    ? Math.floor(maxAgeSeconds)
+    : 900;
+
+  const token = await new SignJWT({
+    workspaceId: identity.workspaceId,
+    userId: identity.userId,
+    ...payload,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(`${safeMaxAge}s`)
+    .setSubject(identity.userId)
+    .sign(key);
+
+  return {
+    token,
+    maxAgeSeconds: safeMaxAge,
+  };
+}
+
+export async function parseJegComputeTierFromCookie(
+  cookieHeader: string,
+  identity: WorkspaceIdentity,
+) {
+  const cookies = parse(cookieHeader || '');
+  const token = cookies[JEG_COMPUTE_COOKIE_NAME];
+  if (!token) return null;
+
+  const key = getComputeSigningKey();
+  if (!key) return null;
+
+  try {
+    const verified = await jwtVerify(token, key);
+    const payload = verified.payload as Record<string, any>;
+
+    if (
+      payload.userId !== identity.userId ||
+      payload.workspaceId !== identity.workspaceId
+    ) {
+      return null;
+    }
+
+    if (!ALLOWED_COMPUTE_TIERS.includes(payload.computeTier as ComputeTier)) {
+      return null;
+    }
+
+    return {
+      token,
+      compute: {
+        computeTier: payload.computeTier as ComputeTier,
+        workspaceId: payload.workspaceId,
+        userId: payload.userId,
+      } satisfies JegComputeTier,
     };
   } catch {
     return null;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
 import type { GetServerSidePropsContext } from 'next';
@@ -12,9 +12,11 @@ import {
   isLocalJegDevelopmentModeEnabled,
   resolveWorkspaceIdentityFromCookie,
 } from './lib/jegSecurity';
+import type { ComputeTier } from './lib/jegSecurity';
 import SharedLibrariesPanel from './components/SharedLibrariesPanel';
 import ActiveMountsStatusBar from './components/ActiveMountsStatusBar';
 import KernelLifecyclePanel from './components/KernelLifecyclePanel';
+import ComputeSelectionModal from './components/ComputeSelectionModal';
 
 type JegSession = {
   baseUrl: string;
@@ -170,6 +172,94 @@ const WorkspaceJEGPage = ({
   const [isApplyingProfile, setIsApplyingProfile] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(true);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(true);
+  const [showComputeModal, setShowComputeModal] = useState(false);
+  const [computeTierError, setComputeTierError] = useState<string | null>(null);
+  const [isSavingComputeTier, setIsSavingComputeTier] = useState(false);
+  const pendingKernelLaunchRef = useRef<
+    { input: RequestInfo | URL; init?: RequestInit } | null
+  >(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.fetch !== 'function') {
+      return;
+    }
+
+    const originalFetch = window.fetch.bind(window);
+
+    const interceptedFetch: typeof window.fetch = async (input, init) => {
+      const response = await originalFetch(input, init);
+
+      try {
+        const urlValue =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        const normalizedPathname = new URL(urlValue, window.location.origin).pathname;
+
+        if ((response.status === 402 || response.status === 428) && normalizedPathname.endsWith('/api/kernels')) {
+          if (input instanceof Request) {
+            pendingKernelLaunchRef.current = { input: input.clone() };
+          } else {
+            pendingKernelLaunchRef.current = { input, init };
+          }
+          setComputeTierError(null);
+          setShowComputeModal(true);
+          const responseBody = JSON.stringify({ message: 'Compute tier selection required' });
+          return new Response(responseBody, {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          });
+        }
+      } catch {
+        return response;
+      }
+
+      return response;
+    };
+
+    window.fetch = interceptedFetch;
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  const handleComputeTierConfirm = async (tier: ComputeTier) => {
+    setComputeTierError(null);
+    setIsSavingComputeTier(true);
+
+    try {
+      const response = await fetch('/api/workspace/jeg/set-compute-tier', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ tier }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || 'Unable to save compute tier.');
+      }
+
+      setShowComputeModal(false);
+
+      const pendingKernelLaunch = pendingKernelLaunchRef.current;
+      pendingKernelLaunchRef.current = null;
+      if (pendingKernelLaunch) {
+        await fetch(pendingKernelLaunch.input, pendingKernelLaunch.init);
+      }
+    } catch (saveError: any) {
+      setComputeTierError(saveError?.message || 'Unable to save compute tier.');
+    } finally {
+      setIsSavingComputeTier(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -551,6 +641,16 @@ const WorkspaceJEGPage = ({
           </aside>
         </div>
       </section>
+      <ComputeSelectionModal
+        open={showComputeModal}
+        onClose={() => {
+          if (isSavingComputeTier) return;
+          setShowComputeModal(false);
+        }}
+        onConfirm={handleComputeTierConfirm}
+        isSaving={isSavingComputeTier}
+        error={computeTierError}
+      />
     </NavPageLayout>
   );
 };

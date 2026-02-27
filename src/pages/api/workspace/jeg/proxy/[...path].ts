@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import httpProxy from 'http-proxy';
 import { getAccessToken } from '@/lib/auth/getLoginStatus';
 import {
   assertSecureJegConfiguration,
@@ -7,6 +8,7 @@ import {
   buildWorkspaceHeaders,
   evaluateExfiltrationPolicy,
   getDataExfiltrationPolicy,
+  parseJegComputeTierFromCookie,
   parseJegLaunchProfileFromCookie,
   parseJupyterExportContextFromCookie,
   resolveWorkspaceIdentityFromCookie,
@@ -19,6 +21,95 @@ export const config = {
 };
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+type ComputeTierSpec = {
+  cpu: string;
+  memory: string;
+  gpu: string;
+};
+
+const COMPUTE_TIER_SPECS: Record<string, ComputeTierSpec> = {
+  'standard-2cpu': { cpu: '2', memory: '8Gi', gpu: '0' },
+  'large-8cpu': { cpu: '8', memory: '32Gi', gpu: '0' },
+  'gpu-1x': { cpu: '8', memory: '32Gi', gpu: '1' },
+};
+
+const POLLUTION_BLOCKED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function isKernelLaunchRequest(path: string, method: string): boolean {
+  return method === 'POST' && path.toLowerCase().endsWith('/api/kernels');
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function safeDeepClone(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => safeDeepClone(item));
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const clone: Record<string, unknown> = Object.create(null);
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (POLLUTION_BLOCKED_KEYS.has(key)) continue;
+    clone[key] = safeDeepClone(nestedValue);
+  }
+  return clone;
+}
+
+async function getSessionComputeTier(
+  req: NextApiRequest,
+  identity: Parameters<typeof parseJegComputeTierFromCookie>[1],
+): Promise<string | null> {
+  const computeTier = await parseJegComputeTierFromCookie(
+    req.headers.cookie || '',
+    identity,
+  );
+  return computeTier?.compute.computeTier || null;
+}
+
+function injectKernelComputeTierEnv(
+  body: Buffer | undefined,
+  computeTier: string,
+): Buffer {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse((body || Buffer.from('{}')).toString('utf8'));
+  } catch {
+    throw new Error('Invalid JSON body for kernel launch request.');
+  }
+
+  if (!isPlainObject(parsed)) {
+    throw new Error('Kernel launch payload must be a JSON object.');
+  }
+
+  const tierSpec = COMPUTE_TIER_SPECS[computeTier];
+  if (!tierSpec) {
+    throw new Error('Unsupported compute tier selection.');
+  }
+
+  const cloned = safeDeepClone(parsed) as Record<string, unknown>;
+  const existingEnv = isPlainObject(cloned.env)
+    ? (safeDeepClone(cloned.env) as Record<string, unknown>)
+    : Object.create(null);
+
+  const injectedEnv: Record<string, unknown> = Object.create(null);
+  for (const [key, value] of Object.entries(existingEnv)) {
+    if (POLLUTION_BLOCKED_KEYS.has(key)) continue;
+    injectedEnv[key] = value;
+  }
+  injectedEnv.KERNEL_RESOURCE_CPU = tierSpec.cpu;
+  injectedEnv.KERNEL_RESOURCE_MEMORY = tierSpec.memory;
+  injectedEnv.KERNEL_RESOURCE_GPU = tierSpec.gpu;
+  injectedEnv.KERNEL_PRICING_TIER = computeTier;
+
+  cloned.env = injectedEnv;
+  return Buffer.from(JSON.stringify(cloned));
+}
 
 function asPathArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
@@ -141,7 +232,17 @@ export default async function handler(
   }
 
   const target = buildTargetUrl(req, jegServerUrl);
-  const body = await readRequestBody(req);
+  const requestBody = await readRequestBody(req);
+  const contentType = req.headers['content-type'] as string | undefined;
+  const isKernelLaunch = isKernelLaunchRequest(requestedPath, method);
+  let computeTier: string | null = null;
+
+  if (isKernelLaunch) {
+    computeTier = await getSessionComputeTier(req, identityResult.identity);
+    if (computeTier == null) {
+      return res.status(402).json({ error: 'Compute tier selection required' });
+    }
+  }
 
   try {
     const incomingToken = getAccessToken(req.headers.cookie || '');
@@ -156,63 +257,92 @@ export default async function handler(
     const bodyWithLaunch = maybeInjectLaunchProfile(
       requestedPath,
       method,
-      req.headers['content-type'] as string | undefined,
-      body,
+      contentType,
+      requestBody,
       launchProfile,
     );
-
-    const upstreamHeaders = new Headers();
-    if (req.headers['content-type']) {
-      upstreamHeaders.set('content-type', req.headers['content-type'] as string);
-    }
-    if (req.headers.accept) {
-      upstreamHeaders.set('accept', req.headers.accept as string);
-    }
-    if (incomingToken) {
-      upstreamHeaders.set('Authorization', `Bearer ${incomingToken}`);
-    }
-    for (const [key, value] of Object.entries(
-      buildWorkspaceHeaders(identityResult.identity),
-    )) {
-      upstreamHeaders.set(key, value);
-    }
-    if (exportContext) {
-      upstreamHeaders.set('x-jeg-context-jwt', exportContext.token);
-    }
-    if (launchProfile) {
-      upstreamHeaders.set('x-jeg-launch-jwt', launchProfile.token);
-      upstreamHeaders.set('x-jeg-launch-mode', launchProfile.profile.mode);
-    }
-    for (const [key, value] of Object.entries(buildSecurityHeaders())) {
-      upstreamHeaders.set(key, value);
-    }
-    for (const [key, value] of Object.entries(buildIapHeaders())) {
-      upstreamHeaders.set(key, value);
-    }
-
-    const upstreamBody =
-      bodyWithLaunch !== undefined ? new Uint8Array(bodyWithLaunch) : undefined;
-
-    const upstream = await fetch(target.toString(), {
-      method,
-      headers: upstreamHeaders,
-      body: upstreamBody,
-      redirect: 'manual',
+    const proxy = httpProxy.createProxyServer({
+      changeOrigin: true,
+      autoRewrite: true,
+      ws: true,
     });
 
-    res.status(upstream.status);
-    const contentType = upstream.headers.get('content-type');
-    const contentDisposition = upstream.headers.get('content-disposition');
-    const cacheControl = upstream.headers.get('cache-control');
+    await new Promise<void>((resolve) => {
+      proxy.once('proxyReq', (proxyReq: any) => {
+        if (contentType) {
+          proxyReq.setHeader('content-type', contentType);
+        }
+        if (req.headers.accept) {
+          proxyReq.setHeader('accept', req.headers.accept as string);
+        }
+        if (incomingToken) {
+          proxyReq.setHeader('Authorization', `Bearer ${incomingToken}`);
+        }
+        for (const [key, value] of Object.entries(
+          buildWorkspaceHeaders(identityResult.identity),
+        )) {
+          proxyReq.setHeader(key, value);
+        }
+        if (exportContext) {
+          proxyReq.setHeader('x-jeg-context-jwt', exportContext.token);
+        }
+        if (launchProfile) {
+          proxyReq.setHeader('x-jeg-launch-jwt', launchProfile.token);
+          proxyReq.setHeader('x-jeg-launch-mode', launchProfile.profile.mode);
+        }
+        for (const [key, value] of Object.entries(buildSecurityHeaders())) {
+          proxyReq.setHeader(key, value);
+        }
+        for (const [key, value] of Object.entries(buildIapHeaders())) {
+          proxyReq.setHeader(key, value);
+        }
 
-    if (contentType) res.setHeader('Content-Type', contentType);
-    if (contentDisposition) {
-      res.setHeader('Content-Disposition', contentDisposition);
-    }
-    if (cacheControl) res.setHeader('Cache-Control', cacheControl);
+        let outboundBody = bodyWithLaunch;
 
-    const responseBuffer = Buffer.from(await upstream.arrayBuffer());
-    return res.send(responseBuffer);
+        if (isKernelLaunch && computeTier) {
+          try {
+            outboundBody = injectKernelComputeTierEnv(outboundBody, computeTier);
+          } catch (error: any) {
+            proxyReq.destroy();
+            if (!res.headersSent) {
+              res.status(400).json({
+                error: error?.message || 'Invalid kernel launch payload.',
+              });
+            }
+            resolve();
+            return;
+          }
+        }
+
+        if (outboundBody !== undefined) {
+          proxyReq.removeHeader('transfer-encoding');
+          proxyReq.setHeader('Content-Length', String(outboundBody.length));
+          proxyReq.write(outboundBody);
+          proxyReq.end();
+        }
+      });
+
+      proxy.once('proxyRes', () => {
+        resolve();
+      });
+
+      proxy.once('error', (error: unknown) => {
+        if (!res.headersSent) {
+          res.status(502).json({
+            error: 'Failed to proxy request to JEG.',
+            detail: (error as Error)?.message || 'Unknown proxy error',
+          });
+        }
+        resolve();
+      });
+
+      req.url = `${target.pathname}${target.search}`;
+      proxy.web(req, res, {
+        target: `${target.protocol}//${target.host}`,
+      });
+    });
+
+    return;
   } catch (error: any) {
     return res.status(502).json({
       error: 'Failed to proxy request to JEG.',
