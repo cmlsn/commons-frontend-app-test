@@ -12,11 +12,9 @@ import {
   isLocalJegDevelopmentModeEnabled,
   resolveWorkspaceIdentityFromCookie,
 } from './lib/jegSecurity';
-import type { ComputeTier } from './lib/jegSecurity';
 import SharedLibrariesPanel from './components/SharedLibrariesPanel';
 import ActiveMountsStatusBar from './components/ActiveMountsStatusBar';
 import KernelLifecyclePanel from './components/KernelLifecyclePanel';
-import ComputeSelectionModal from './components/ComputeSelectionModal';
 
 type JegSession = {
   baseUrl: string;
@@ -58,9 +56,6 @@ const WorkspaceJEGPage = ({
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(true);
-  const [showComputeModal, setShowComputeModal] = useState(false);
-  const [computeTierError, setComputeTierError] = useState<string | null>(null);
-  const [isSavingComputeTier, setIsSavingComputeTier] = useState(false);
   
   const mountPointRef = useRef<HTMLDivElement>(null);
   const staticAssetBaseUrl = (process.env.NEXT_PUBLIC_JEG_STATIC_ASSET_BASE_URL || '/jupyter').replace(/\/$/, '');
@@ -69,33 +64,10 @@ const WorkspaceJEGPage = ({
     ? !loading && !error
     : !loading && !error && Boolean(session?.baseUrl) && !session?.previewMode;
 
-  // UX Toggle: Zen Mode for maximizing code real estate
   const toggleZenMode = () => {
     const isEnteringZen = !isLeftSidebarCollapsed || !isRightSidebarCollapsed;
     setIsLeftSidebarCollapsed(isEnteringZen);
     setIsRightSidebarCollapsed(isEnteringZen);
-  };
-
-  const handleComputeTierConfirm = async (tier: ComputeTier) => {
-    setComputeTierError(null);
-    setIsSavingComputeTier(true);
-    try {
-      const response = await fetch('/api/workspace/jeg/set-compute-tier', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tier }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error || 'Unable to save compute tier.');
-      }
-      setShowComputeModal(false);
-    } catch (saveError: any) {
-      setComputeTierError(saveError?.message || 'Unable to save compute tier.');
-    } finally {
-      setIsSavingComputeTier(false);
-    }
   };
 
   useEffect(() => {
@@ -140,7 +112,6 @@ const WorkspaceJEGPage = ({
     setLaunchMode(tab === 'personal' ? 'personal' : 'pre-release');
   };
 
-  // The Cleaned ALB/S3 Engine Loader
   useEffect(() => {
     if (!shouldRenderJupyterMountPoint) return;
     const mountPoint = mountPointRef.current;
@@ -149,7 +120,6 @@ const WorkspaceJEGPage = ({
     let disposed = false;
     let mountCheckTimer: number | undefined;
 
-    // 1. Jail Styles & Popup Container (Protects the Gen3 Header)
     const popupContainerId = 'jupyter-popup-container';
     let popupContainer = document.getElementById(popupContainerId);
     if (!popupContainer) {
@@ -160,6 +130,9 @@ const WorkspaceJEGPage = ({
     }
 
     const shellContainStyleId = 'jeg-shell-contain-styles';
+    const existingStyle = document.getElementById(shellContainStyleId);
+    if (existingStyle) existingStyle.remove();
+    
     const shellContainStyle = document.createElement('style');
     shellContainStyle.id = shellContainStyleId;
     shellContainStyle.textContent = `
@@ -171,7 +144,6 @@ const WorkspaceJEGPage = ({
     `;
     document.head.appendChild(shellContainStyle);
 
-    // 2. DOM Interceptors (Routes Lumino widgets into the correct divs)
     const origBodyInsertBefore = document.body.insertBefore.bind(document.body);
     const origBodyAppendChild = document.body.appendChild.bind(document.body);
     const origBodyRemoveChild = document.body.removeChild.bind(document.body);
@@ -195,7 +167,6 @@ const WorkspaceJEGPage = ({
       return origBodyRemoveChild(node);
     };
 
-    // 3. Dynamic WS Config Setup
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const runtimeWsUrl = process.env.NEXT_PUBLIC_JEG_PROXY_WS_URL || `${wsProtocol}://${window.location.host}/api/workspace/jeg/proxy/`;
     const wsConfigScript = document.createElement('script');
@@ -204,7 +175,6 @@ const WorkspaceJEGPage = ({
     wsConfigScript.textContent = JSON.stringify({ wsUrl: runtimeWsUrl });
     document.head.appendChild(wsConfigScript);
 
-    // 4. Load the Engine natively from the ALB/S3 path
     const configUtils = document.createElement('script');
     configUtils.src = `${staticAssetBaseUrl}/config-utils.js`;
     document.body.appendChild(configUtils);
@@ -227,7 +197,6 @@ const WorkspaceJEGPage = ({
       document.body.appendChild(engineScript);
     };
 
-    // Keep layout tightly synced with Next.js container resizes
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => window.dispatchEvent(new Event('resize')));
@@ -249,10 +218,18 @@ const WorkspaceJEGPage = ({
   }, [shouldRenderJupyterMountPoint, staticAssetBaseUrl]);
 
   return (
-    <NavPageLayout {...{ headerProps, footerProps }} mainProps={{ fixed: true }}>
+    <NavPageLayout
+      headerProps={headerProps}
+      footerProps={footerProps}
+      mainProps={{ fixed: true }}
+      headerMetadata={{
+        title: 'Workspace JupyterLab',
+        content: 'Secure JupyterLab Workspace',
+        key: 'workspace-jeg-page',
+      }}
+    >
       <Head>
         <title>Workspace JupyterLab</title>
-        {/* Tells Jupyter to fetch assets from the S3 path, but send secure API calls to Next.js Proxy */}
         <script
           id="jupyter-config-data"
           type="application/json"
@@ -321,7 +298,6 @@ const WorkspaceJEGPage = ({
                   {session && <ActiveMountsStatusBar launchMode={session.launchMode || launchMode} mounts={session.activeMounts || []} />}
                 </div>
 
-                {/* UX Enhancement: Zen Mode Toggle */}
                 <div className="flex flex-1 justify-center">
                   <button type="button" onClick={toggleZenMode} className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {isLeftSidebarCollapsed && isRightSidebarCollapsed ? (
@@ -370,7 +346,6 @@ const WorkspaceJEGPage = ({
           </aside>
         </div>
       </section>
-      <ComputeSelectionModal open={showComputeModal} onClose={() => { if (!isSavingComputeTier) setShowComputeModal(false); }} onConfirm={handleComputeTierConfirm} isSaving={isSavingComputeTier} error={computeTierError} />
     </NavPageLayout>
   );
 };
