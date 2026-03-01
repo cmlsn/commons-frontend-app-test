@@ -10,7 +10,7 @@ import {
   parseJegLaunchProfileFromCookie,
   parseJupyterExportContextFromCookie,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 
 export const config = {
   api: {

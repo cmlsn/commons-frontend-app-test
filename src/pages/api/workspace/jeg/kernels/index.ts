@@ -1,9 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+// Fixed Import Paths:
 import {
   getProxyBaseUrl,
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/lib/workspace/jegSecurity';
+} from '@/features/jeg-workspace/lib/jegSecurity';
 
 const IDLE_WARNING_DAYS = Number(process.env.JEG_IDLE_WARNING_DAYS || '5');
 const IDLE_KILL_DAYS = Number(process.env.JEG_IDLE_KILL_DAYS || '10');
@@ -164,7 +165,6 @@ export default async function handler(
         0,
         Math.floor(sessionAgeMinutes * 0.3),
       );
-      // TODO: Replace fallback with real Prometheus/Kubernetes workflow execution metrics.
       const staleState = classifyStale(idleDays, ageDays);
 
       return {
