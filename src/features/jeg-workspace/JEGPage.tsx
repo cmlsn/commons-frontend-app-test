@@ -261,21 +261,21 @@ const WorkspaceJEGPage = ({
         />
       </Head>
       <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-100">
-        <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+        <header className={`flex shrink-0 items-center justify-between border-b border-slate-200 bg-white shadow-sm ${isWorkspaceMaximized ? 'h-[44px] px-4' : 'h-[60px] px-6'}`}>
+          <div className={`flex items-center ${isWorkspaceMaximized ? 'gap-4' : 'gap-8'}`}>
+            <div className={`flex items-center ${isWorkspaceMaximized ? 'gap-2' : 'gap-3'}`}>
+              <div className={`flex items-center justify-center rounded-lg bg-blue-600 text-white ${isWorkspaceMaximized ? 'h-6 w-6' : 'h-8 w-8'}`}>
                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
               </div>
-              <h1 className="text-lg font-bold text-slate-800">Gen3 Workspace</h1>
+              <h1 className={`font-bold text-slate-800 ${isWorkspaceMaximized ? 'text-base' : 'text-lg'}`}>Gen3 Workspace</h1>
             </div>
-            <nav className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
+            <nav className={`flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 ${isWorkspaceMaximized ? 'p-0.5' : 'p-1'}`}>
               {(['personal', 'team', 'demos'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => handleGlobalTabChange(tab)}
-                  className={`rounded-md px-4 py-1.5 text-sm font-semibold capitalize transition-colors ${globalNavTab === tab ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
+                  className={`rounded-md font-semibold capitalize transition-colors ${isWorkspaceMaximized ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-sm'} ${globalNavTab === tab ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
                 >
                   {tab}
                 </button>
