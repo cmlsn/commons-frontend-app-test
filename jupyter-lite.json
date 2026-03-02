@@ -1,0 +1,20 @@
+{
+  "jupyter-config-data": {
+    "disabledExtensions": [
+      "@jupyterlab/filebrowser-extension:default-file-browser",
+      "@jupyterlite/localforage-extension",
+      "@jupyterlite/javascript-kernel-extension:kernel",
+      "@jupyterlite/echo-kernel-extension:kernel"
+    ],
+    "litePluginSettings": {
+      "@jupyterlite/server-extension:service-worker": {
+        "register": false
+      }
+    }
+  },
+  "settingsOverrides": {
+    "@jupyterlab/docmanager-extension:plugin": {
+      "autosave": false
+    }
+  }
+}

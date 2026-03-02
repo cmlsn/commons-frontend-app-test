@@ -118,22 +118,16 @@ const WorkspaceJEGPage = ({
     if (!mountPoint) return;
 
     let disposed = false;
-    let mountCheckTimer: number | undefined;
 
-    const popupContainerId = 'jupyter-popup-container';
-    let popupContainer = document.getElementById(popupContainerId);
-    if (!popupContainer) {
-      popupContainer = document.createElement('div');
-      popupContainer.id = popupContainerId;
-      popupContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100000; pointer-events: none;';
-      document.body.appendChild(popupContainer);
-    }
+    // Create popup container for menus/dialogs
+    const popupContainer = document.createElement('div');
+    popupContainer.id = 'jupyter-popup-container';
+    popupContainer.setAttribute('style', 'position: fixed; top: 0; left: 0; z-index: 10000; pointer-events: none;');
+    document.body.appendChild(popupContainer);
 
-    const shellContainStyleId = 'jeg-shell-contain-styles';
-    const existingStyle = document.getElementById(shellContainStyleId);
-    if (existingStyle) existingStyle.remove();
-    
+    // Add CSS to constrain the shell and handle popups
     const shellContainStyle = document.createElement('style');
+    const shellContainStyleId = 'jupyter-shell-contain';
     shellContainStyle.id = shellContainStyleId;
     shellContainStyle.textContent = `
       #jupyter-popup-container > .lm-Widget { pointer-events: auto; position: absolute !important; }
@@ -144,6 +138,7 @@ const WorkspaceJEGPage = ({
     `;
     document.head.appendChild(shellContainStyle);
 
+    // Intercept DOM mutations to route JupyterLab components to mount point
     const origBodyInsertBefore = document.body.insertBefore.bind(document.body);
     const origBodyAppendChild = document.body.appendChild.bind(document.body);
     const origBodyRemoveChild = document.body.removeChild.bind(document.body);
@@ -167,78 +162,32 @@ const WorkspaceJEGPage = ({
       return origBodyRemoveChild(node);
     };
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const runtimeWsUrl = `${wsProtocol}://${window.location.host}/api/workspace/jeg/proxy/`;
-    const wsConfigScript = document.createElement('script');
-    wsConfigScript.id = 'jupyter-ws-runtime-config';
-    wsConfigScript.type = 'application/json';
-    wsConfigScript.textContent = JSON.stringify({ wsUrl: runtimeWsUrl });
-    document.head.appendChild(wsConfigScript);
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const registration of registrations) {
-          if (
-            registration.scope.includes('/jupyter')
-            || registration.scope === `${window.location.origin}/`
-          ) {
-            registration.unregister();
-          }
-        }
-      });
-    }
-
-    document.body.setAttribute('data-base-url', `${staticAssetBaseUrl}/`);
-    document.body.setAttribute('data-app-url', window.location.pathname);
-    document.body.setAttribute('data-jupyter-lite-root', `${staticAssetBaseUrl}/`);
-
-    (window as any).__webpack_public_path__ = `${staticAssetBaseUrl}/`;
-    (window as any).__webpack_base_uri__ = `${window.location.origin}${staticAssetBaseUrl}/`;
-
-    const configUtils = document.createElement('script');
-    configUtils.src = `${staticAssetBaseUrl}/config-utils.js`;
-    configUtils.type = 'module';
-    document.body.appendChild(configUtils);
-
-    configUtils.onload = () => {
-      if (disposed) return;
-      if (!(window as any).webpackChunk_jupyterlab_application_top) {
-        (window as any).webpackChunk_jupyterlab_application_top = [];
-      }
-
-      const engineScript = document.createElement('script');
-      engineScript.id = 'jupyter-lab-engine';
-      engineScript.src = `${staticAssetBaseUrl}/index.js`;
-      engineScript.type = 'module';
-      
-      engineScript.onerror = () => { if (!disposed) setError('Failed to load Jupyter engine script.'); };
-      engineScript.onload = () => {
-        if (disposed) return;
-        mountCheckTimer = window.setTimeout(() => {
-          const shellNode = mountPoint.querySelector('.jp-LabShell');
-          if (!shellNode) setError('Jupyter runtime loaded but did not mount. Check console.');
-        }, 7000);
-      };
-      document.body.appendChild(engineScript);
-    };
-
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => window.dispatchEvent(new Event('resize')));
-      resizeObserver.observe(mountPoint);
+    // Load the bundle
+    const preloader = document.getElementById('jupyter-lite-main') as HTMLLinkElement;
+    if (!preloader) {
+      // If no preloader, inject bootstrap.js directly
+      const script = document.createElement('script');
+      script.src = `${staticAssetBaseUrl}/bootstrap.js`;
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+    } else {
+      // Load via preload link
+      const script = document.createElement('script');
+      script.src = preloader.href;
+      script.setAttribute('main', preloader.getAttribute('main') || 'index');
+      document.head.appendChild(script);
     }
 
     return () => {
       disposed = true;
+      // Restore original methods
       (document.body as any).insertBefore = origBodyInsertBefore;
       (document.body as any).appendChild = origBodyAppendChild;
       (document.body as any).removeChild = origBodyRemoveChild;
-      if (mountCheckTimer) window.clearTimeout(mountCheckTimer);
-      ['jupyter-ws-runtime-config', 'jupyter-lab-engine', shellContainStyleId, popupContainerId].forEach(id => {
-        const el = document.getElementById(id);
-        if (el?.parentNode) el.parentNode.removeChild(el);
-      });
-      resizeObserver?.disconnect();
+      // Clean up
+      if (popupContainer.parentNode) popupContainer.parentNode.removeChild(popupContainer);
+      const styleEl = document.getElementById(shellContainStyleId);
+      if (styleEl?.parentNode) styleEl.parentNode.removeChild(styleEl);
     };
   }, [shouldRenderJupyterMountPoint, staticAssetBaseUrl]);
 
@@ -256,19 +205,31 @@ const WorkspaceJEGPage = ({
       <Head>
         <title>Workspace JupyterLab</title>
         <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__webpack_public_path__ = '${staticAssetBaseUrl}/build/';`,
+          }}
+        />
+        <link
+          id="jupyter-lite-main"
+          rel="preload"
+          href={`${staticAssetBaseUrl}/build/lab/bundle.js`}
+          // @ts-ignore - custom attribute used by JupyterLite
+          main="index"
+          as="script"
+        />
+        <script
           id="jupyter-config-data"
           type="application/json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               baseUrl: `${staticAssetBaseUrl}/`,
               staticUrl: `${staticAssetBaseUrl}/`,
-              themesUrl: `${staticAssetBaseUrl}/api/themes`,
-              settingsUrl: `${staticAssetBaseUrl}/api/settings`,
+              themesUrl: `./build/themes`,
+              settingsUrl: `./build/schemas`,
               fullKernelsUrl: '/api/workspace/jeg/proxy/api/kernels',
               fullSessionsUrl: '/api/workspace/jeg/proxy/api/sessions',
               fullKernelspecsUrl: '/api/workspace/jeg/proxy/api/kernelspecs',
               fullWorkspacesUrl: '/api/workspace/jeg/proxy/api/workspaces',
-              fullContentsUrl: '/api/workspace/jeg/proxy/api/contents',
               appName: 'Gen3 Workspace',
               federated_extensions: [],
             }),
@@ -352,7 +313,7 @@ const WorkspaceJEGPage = ({
               <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
                 {error && <div className="m-4 rounded border border-red-300 bg-red-50 p-6 text-sm text-red-800">{error}</div>}
                 {!error && (
-                  <div id="jupyterlab-site" ref={mountPointRef} className="relative flex-1 w-full overflow-hidden bg-white" style={{ position: 'relative', width: '100%', height: '100%' }}></div>
+                  <div id="jupyterlab-site" ref={mountPointRef} className="relative flex-1 w-full overflow-hidden bg-white" style={{ position: 'relative', width: '100%', height: '100%' }} />
                 )}
               </div>
             </div>
