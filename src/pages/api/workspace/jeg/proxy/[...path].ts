@@ -155,6 +155,8 @@ export default async function handler(
     }
     if (req.headers.accept) {
       upstreamHeaders.set('accept', req.headers.accept as string);
+    } else if (method === 'GET') {
+      upstreamHeaders.set('accept', 'application/json');
     }
     if (incomingToken) {
       upstreamHeaders.set('Authorization', `Bearer ${incomingToken}`);

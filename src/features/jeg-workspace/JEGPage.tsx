@@ -168,25 +168,50 @@ const WorkspaceJEGPage = ({
     };
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const runtimeWsUrl = process.env.NEXT_PUBLIC_JEG_PROXY_WS_URL || `${wsProtocol}://${window.location.host}/api/workspace/jeg/proxy/`;
+    const runtimeWsUrl = `${wsProtocol}://${window.location.host}/api/workspace/jeg/proxy/`;
     const wsConfigScript = document.createElement('script');
     wsConfigScript.id = 'jupyter-ws-runtime-config';
     wsConfigScript.type = 'application/json';
     wsConfigScript.textContent = JSON.stringify({ wsUrl: runtimeWsUrl });
     document.head.appendChild(wsConfigScript);
 
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          if (
+            registration.scope.includes('/jupyter')
+            || registration.scope === `${window.location.origin}/`
+          ) {
+            registration.unregister();
+          }
+        }
+      });
+    }
+
+    document.body.setAttribute('data-base-url', `${staticAssetBaseUrl}/`);
+    document.body.setAttribute('data-app-url', window.location.pathname);
+    document.body.setAttribute('data-jupyter-lite-root', `${staticAssetBaseUrl}/`);
+
+    (window as any).__webpack_public_path__ = `${staticAssetBaseUrl}/`;
+    (window as any).__webpack_base_uri__ = `${window.location.origin}${staticAssetBaseUrl}/`;
+
     const configUtils = document.createElement('script');
     configUtils.src = `${staticAssetBaseUrl}/config-utils.js`;
+    configUtils.type = 'module';
     document.body.appendChild(configUtils);
 
     configUtils.onload = () => {
       if (disposed) return;
+      if (!(window as any).webpackChunk_jupyterlab_application_top) {
+        (window as any).webpackChunk_jupyterlab_application_top = [];
+      }
+
       const engineScript = document.createElement('script');
       engineScript.id = 'jupyter-lab-engine';
-      engineScript.src = `${staticAssetBaseUrl}/bootstrap.js`;
+      engineScript.src = `${staticAssetBaseUrl}/index.js`;
       engineScript.type = 'module';
       
-      engineScript.onerror = () => { if (!disposed) setError('Failed to load Jupyter bootstrap.js from S3 via ALB.'); };
+      engineScript.onerror = () => { if (!disposed) setError('Failed to load Jupyter engine script.'); };
       engineScript.onload = () => {
         if (disposed) return;
         mountCheckTimer = window.setTimeout(() => {
@@ -236,12 +261,14 @@ const WorkspaceJEGPage = ({
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               baseUrl: `${staticAssetBaseUrl}/`,
+              staticUrl: `${staticAssetBaseUrl}/`,
+              themesUrl: `${staticAssetBaseUrl}/api/themes`,
+              settingsUrl: `${staticAssetBaseUrl}/api/settings`,
               fullKernelsUrl: '/api/workspace/jeg/proxy/api/kernels',
               fullSessionsUrl: '/api/workspace/jeg/proxy/api/sessions',
               fullKernelspecsUrl: '/api/workspace/jeg/proxy/api/kernelspecs',
               fullWorkspacesUrl: '/api/workspace/jeg/proxy/api/workspaces',
               fullContentsUrl: '/api/workspace/jeg/proxy/api/contents',
-              fullSettingsUrl: '/api/workspace/jeg/proxy/api/settings',
               appName: 'Gen3 Workspace',
               federated_extensions: [],
             }),

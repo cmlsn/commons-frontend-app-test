@@ -36,6 +36,14 @@ const nextConfig = {
     };
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/jupyter/:path*',
+        destination: 'http://localhost:8080/:path*',
+      },
+    ];
+  },
   async headers() {
     return [
       {
