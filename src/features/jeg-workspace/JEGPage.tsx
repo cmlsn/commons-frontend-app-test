@@ -56,6 +56,7 @@ const WorkspaceJEGPage = ({
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(true);
+  const [isWorkspaceMaximized, setIsWorkspaceMaximized] = useState(false);
   
   const mountPointRef = useRef<HTMLDivElement>(null);
   const staticAssetBaseUrl = (process.env.NEXT_PUBLIC_JEG_STATIC_ASSET_BASE_URL || '/jupyter').replace(/\/$/, '');
@@ -65,10 +66,28 @@ const WorkspaceJEGPage = ({
     : !loading && !error && Boolean(session?.baseUrl) && !session?.previewMode;
 
   const toggleZenMode = () => {
-    const isEnteringZen = !isLeftSidebarCollapsed || !isRightSidebarCollapsed;
-    setIsLeftSidebarCollapsed(isEnteringZen);
-    setIsRightSidebarCollapsed(isEnteringZen);
+    const nextMaximized = !isWorkspaceMaximized;
+    setIsWorkspaceMaximized(nextMaximized);
+    setIsLeftSidebarCollapsed(nextMaximized);
+    setIsRightSidebarCollapsed(nextMaximized);
   };
+
+  useEffect(() => {
+    const delay = window.setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 320);
+    return () => window.clearTimeout(delay);
+  }, [isLeftSidebarCollapsed, isRightSidebarCollapsed, isWorkspaceMaximized]);
+
+  useEffect(() => {
+    if (isWorkspaceMaximized) {
+      document.body.classList.add('workspace-jeg-maximized');
+      return () => {
+        document.body.classList.remove('workspace-jeg-maximized');
+      };
+    }
+    document.body.classList.remove('workspace-jeg-maximized');
+  }, [isWorkspaceMaximized]);
 
   useEffect(() => {
     if (staticJupyterModeEnabled) {
@@ -204,6 +223,11 @@ const WorkspaceJEGPage = ({
     >
       <Head>
         <title>Workspace JupyterLab</title>
+        <style>{`
+          body.workspace-jeg-maximized footer {
+            display: none !important;
+          }
+        `}</style>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.__webpack_public_path__ = '${staticAssetBaseUrl}/build/';`,
@@ -265,7 +289,10 @@ const WorkspaceJEGPage = ({
             <div className="flex h-full flex-col w-[320px]">
               <div className="flex items-center justify-between border-b border-slate-200 p-4">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Data & Tools</h2>
-                <button type="button" onClick={() => setIsLeftSidebarCollapsed(true)} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
+                <button type="button" onClick={() => {
+                  setIsLeftSidebarCollapsed(true);
+                  if (!isRightSidebarCollapsed) setIsWorkspaceMaximized(false);
+                }} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" /></svg>
                 </button>
               </div>
@@ -279,7 +306,13 @@ const WorkspaceJEGPage = ({
             <div className="shrink-0 border-b border-slate-200 bg-slate-50/50">
               <div className="flex h-12 items-center justify-between px-4">
                 <div className="flex items-center gap-4">
-                  <button type="button" onClick={() => setIsLeftSidebarCollapsed(c => !c)} className="rounded-md p-2 text-slate-500 hover:bg-slate-200">
+                  <button type="button" onClick={() => {
+                    setIsLeftSidebarCollapsed((current) => {
+                      const next = !current;
+                      if (!next || !isRightSidebarCollapsed) setIsWorkspaceMaximized(false);
+                      return next;
+                    });
+                  }} className="rounded-md p-2 text-slate-500 hover:bg-slate-200">
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 9.75A.75.75 0 012.75 9h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 9.75zM2 14.75A.75.75 0 012.75 14h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 14.75z" clipRule="evenodd" /></svg>
                   </button>
                   <div className="h-6 w-px bg-slate-200" />
@@ -288,7 +321,7 @@ const WorkspaceJEGPage = ({
 
                 <div className="flex flex-1 justify-center">
                   <button type="button" onClick={toggleZenMode} className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {isLeftSidebarCollapsed && isRightSidebarCollapsed ? (
+                    {isWorkspaceMaximized ? (
                       <><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>Restore Layout</>
                     ) : (
                       <><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 14h6m0 0v6m0-6l-7 7m17-11h-6m0 0V4m0 6l7-7m-7 17v-6m0 0h6m-6 0l7 7M7 10V4m0 0H1m6 0L0 11" /></svg>Maximize Workspace</>
@@ -302,7 +335,13 @@ const WorkspaceJEGPage = ({
                     <span>Exfiltration Control: <strong>{session?.exfiltrationPolicy || 'Strict'}</strong></span>
                   </div>
                   <div className="h-6 w-px bg-slate-200" />
-                  <button type="button" onClick={() => setIsRightSidebarCollapsed(c => !c)} className="rounded-md p-2 text-slate-500 hover:bg-slate-200">
+                  <button type="button" onClick={() => {
+                    setIsRightSidebarCollapsed((current) => {
+                      const next = !current;
+                      if (!next || !isLeftSidebarCollapsed) setIsWorkspaceMaximized(false);
+                      return next;
+                    });
+                  }} className="rounded-md p-2 text-slate-500 hover:bg-slate-200">
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.75a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zM10 8.75a.75.75 0 01.75.75v6.5a.75.75 0 01-1.5 0v-6.5a.75.75 0 01.75-.75zM8.25 4.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z" /></svg>
                   </button>
                 </div>
@@ -323,7 +362,10 @@ const WorkspaceJEGPage = ({
             <div className="flex h-full flex-col w-[340px]">
               <div className="flex items-center justify-between border-b border-slate-200 p-4">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Infrastructure</h2>
-                <button type="button" onClick={() => setIsRightSidebarCollapsed(true)} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
+                <button type="button" onClick={() => {
+                  setIsRightSidebarCollapsed(true);
+                  if (!isLeftSidebarCollapsed) setIsWorkspaceMaximized(false);
+                }} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
                 </button>
               </div>
