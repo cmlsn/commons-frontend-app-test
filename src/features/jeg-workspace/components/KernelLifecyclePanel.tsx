@@ -307,73 +307,6 @@ const KernelLifecyclePanel = () => {
     }
   };
 
-  const openNotebookForKernel = async (kernelRow: KernelRow) => {
-    setOpeningKernelId(kernelRow.kernelId);
-    try {
-      // Create a unique notebook path for this kernel
-      const notebookPath = `Workspace/kernel-${kernelRow.kernelId.slice(0, 8)}-${Date.now()}.ipynb`;
-      
-      // Step 1: Create the notebook file
-      console.log('[KernelPanel] Creating notebook file for kernel:', notebookPath);
-      const emptyNotebook = {
-        cells: [],
-        metadata: {},
-        nbformat: 4,
-        nbformat_minor: 5,
-      };
-      
-      const createResponse = await fetch('/api/workspace/jeg/proxy/api/contents/' + notebookPath, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'notebook',
-          format: 'json',
-          content: emptyNotebook,
-        }),
-      });
-      
-      if (!createResponse.ok && createResponse.status !== 201) {
-        // Try without creating file - create session directly
-        console.log('[KernelPanel] File creation skipped (JEG may have contents API disabled)');
-      }
-
-      // Step 2: Create a session that binds to this kernel
-      // Note: We create a new session with the same kernel spec (JEG doesn't support binding to kernel IDs)
-      const sessionPayload = {
-        path: notebookPath,
-        type: 'notebook',
-        name: '',
-        kernel: { name: kernelRow.kernelName || 'python3' },
-      };
-      
-      console.log('[KernelPanel] Creating session for kernel:', sessionPayload);
-      const sessionResponse = await fetch('/api/workspace/jeg/proxy/api/sessions', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(sessionPayload),
-      });
-      
-      const sessionBody = await sessionResponse.json().catch(() => null);
-      console.log('[KernelPanel] Session create response:', sessionResponse.status, sessionBody);
-      
-      if (!sessionResponse.ok) {
-        const errorMsg = sessionBody?.message || sessionBody?.error || `HTTP ${sessionResponse.status}`;
-        throw new Error(`Failed to create session: ${errorMsg}`);
-      }
-
-      setNotice(`✓ Notebook "${notebookPath}" created and bound to kernel. Open it in JupyterLab file browser to start using it.`);
-      await fetchKernelState();
-      
-    } catch (err) {
-      console.error('[KernelPanel] Error opening notebook for kernel:', err);
-      setNotice((err as any)?.message || 'Failed to create notebook for kernel.');
-    } finally {
-      setOpeningKernelId(null);
-    }
-  };
-
   const reapStaleKernels = useCallback(async () => {
     try {
       const response = await fetch('/api/workspace/jeg/kernels/reap-stale', {
@@ -662,14 +595,6 @@ const KernelLifecyclePanel = () => {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openNotebookForKernel(row)}
-                    disabled={pending || openingKernelId === row.kernelId}
-                    className="flex-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {openingKernelId === row.kernelId ? 'Opening...' : 'Open Notebook'}
-                  </button>
                   <button
                     type="button"
                     onClick={() => publishRow(row)}
