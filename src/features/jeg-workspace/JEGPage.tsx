@@ -60,6 +60,28 @@ const WorkspaceJEGPage = ({
   
   const mountPointRef = useRef<HTMLDivElement>(null);
   const staticAssetBaseUrl = (process.env.NEXT_PUBLIC_JEG_STATIC_ASSET_BASE_URL || '/jupyter').replace(/\/$/, '');
+  const configuredWsUrl = (process.env.NEXT_PUBLIC_JEG_WS_URL || process.env.JEG_WS_URL || '').trim();
+  
+  // For local dev with Basic auth, inject credentials into WebSocket URL
+  const runtimeWsUrl = (() => {
+    const baseWsUrl = configuredWsUrl || 'ws://localhost:18888';
+    // Check if local dev mode (client-side check)
+    if (typeof window !== 'undefined' && baseWsUrl.includes('localhost')) {
+      // Include Basic auth credentials in WS URL for local dev
+      const username = 'guest'; // From .env.development
+      const password = 'guest-password';
+      // Parse URL and inject credentials
+      try {
+        const url = new URL(baseWsUrl);
+        url.username = username;
+        url.password = password;
+        return url.toString();
+      } catch {
+        return baseWsUrl;
+      }
+    }
+    return baseWsUrl;
+  })();
 
   const shouldRenderJupyterMountPoint = staticJupyterModeEnabled
     ? !loading && !error
@@ -248,18 +270,86 @@ const WorkspaceJEGPage = ({
             __html: JSON.stringify({
               baseUrl: `${staticAssetBaseUrl}/`,
               staticUrl: `${staticAssetBaseUrl}/`,
+              wsUrl: runtimeWsUrl,
+              kernelsUrl: '/api/workspace/jeg/proxy/api/kernels',
+              sessionsUrl: '/api/workspace/jeg/proxy/api/sessions',
+              kernelspecsUrl: '/api/workspace/jeg/proxy/api/kernelspecs',
+              contentsUrl: '/api/workspace/jeg/proxy/api/contents',
               themesUrl: `./build/themes`,
               settingsUrl: `./build/schemas`,
               fullKernelsUrl: '/api/workspace/jeg/proxy/api/kernels',
               fullSessionsUrl: '/api/workspace/jeg/proxy/api/sessions',
               fullKernelspecsUrl: '/api/workspace/jeg/proxy/api/kernelspecs',
               fullWorkspacesUrl: '/api/workspace/jeg/proxy/api/workspaces',
+              fullContentsUrl: '/api/workspace/jeg/proxy/api/contents',
               appName: 'Gen3 Workspace',
               federated_extensions: [],
+              // Configure JupyterLab to use remote kernel gateway
+              disableRTC: true,
+              exposeAppInBrowser: false,
+              collaborative: false,
+              notebookStartsKernel: false, // 🔑 Don't auto-start kernels - use existing ones
+              // Tell Jupyter this is a remote kernel server (JEG)
+              serverSettings: {
+                baseUrl: '/api/workspace/jeg/proxy',
+                wsUrl: runtimeWsUrl,
+                token: '', // Authentication handled by Next.js proxy
+                appendToken: false, // Don't append token to URLs (handled via cookies)
+              },
+              // Extend server settings with authentication for kernel API calls
+              overrides: {
+                'notebook:tracker': {
+                  codeCellConfig: {
+                    lineNumbers: true,
+                  },
+                },
+              },
             }),
           }}
         />
       </Head>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(async () => {
+  // Wait for JupyterLab to initialize and load kernels
+  let attempts = 0;
+  const maxAttempts = 50;
+  
+  while (attempts < maxAttempts) {
+    try {
+      const app = window.jupyterlab?.app || window.jupyterlab;
+      if (!app) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+      
+      console.log('[JEG Init] JupyterLab app initialized');
+      
+      // Fetch running kernels from our proxy
+      const response = await fetch('/api/workspace/jeg/proxy/api/kernels', {
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const kernels = await response.json();
+        console.log('[JEG Init] Running kernels:', kernels);
+        
+        // Store in a global so the kernel manager can access them
+        window.__jegRunningKernels = kernels;
+      }
+      
+      break;
+    } catch (e) {
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+})();
+          `,
+        }}
+      />
       <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-100">
         <header className={`flex shrink-0 items-center justify-between border-b border-slate-200 bg-white shadow-sm ${isWorkspaceMaximized ? 'h-[44px] px-4' : 'h-[60px] px-6'}`}>
           <div className={`flex items-center ${isWorkspaceMaximized ? 'gap-4' : 'gap-8'}`}>

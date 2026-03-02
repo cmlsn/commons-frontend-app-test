@@ -7,6 +7,7 @@ import {
   buildWorkspaceHeaders,
   evaluateExfiltrationPolicy,
   getDataExfiltrationPolicy,
+  isLocalJegDevelopmentModeEnabled,
   parseJegLaunchProfileFromCookie,
   parseJupyterExportContextFromCookie,
   resolveWorkspaceIdentityFromCookie,
@@ -88,6 +89,15 @@ function maybeInjectLaunchProfile(
   }
 }
 
+function getLocalDevBasicAuthHeader(): string | null {
+  if (!isLocalJegDevelopmentModeEnabled()) return null;
+  const username = (process.env.JEG_LOCAL_DEV_USERNAME || 'guest').trim();
+  const password = (process.env.JEG_LOCAL_DEV_PASSWORD || 'guest-password').trim();
+  if (!username || !password) return null;
+  const encoded = Buffer.from(`${username}:${password}`).toString('base64');
+  return `Basic ${encoded}`;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -160,6 +170,11 @@ export default async function handler(
     }
     if (incomingToken) {
       upstreamHeaders.set('Authorization', `Bearer ${incomingToken}`);
+    } else {
+      const localDevBasicAuth = getLocalDevBasicAuthHeader();
+      if (localDevBasicAuth) {
+        upstreamHeaders.set('Authorization', localDevBasicAuth);
+      }
     }
     for (const [key, value] of Object.entries(
       buildWorkspaceHeaders(identityResult.identity),
@@ -183,6 +198,15 @@ export default async function handler(
     const upstreamBody =
       bodyWithLaunch !== undefined ? new Uint8Array(bodyWithLaunch) : undefined;
 
+    // Log request for debugging sessions endpoints
+    if (requestedPath.includes('/sessions')) {
+      console.log(`[Proxy] ${method} ${target.pathname}`);
+      console.log(`[Proxy] Auth:`, upstreamHeaders.get('Authorization')?.substring(0, 20) + '...');
+      if (bodyWithLaunch) {
+        console.log(`[Proxy] Body:`, bodyWithLaunch.toString('utf8').substring(0, 500));
+      }
+    }
+
     const upstream = await fetch(target.toString(), {
       method,
       headers: upstreamHeaders,
@@ -200,6 +224,13 @@ export default async function handler(
       res.setHeader('Content-Disposition', contentDisposition);
     }
     if (cacheControl) res.setHeader('Cache-Control', cacheControl);
+
+    // Log upstream response for debugging sessions endpoints
+    if (!upstream.ok && requestedPath.includes('/sessions')) {
+      const respBody = await upstream.clone().text().catch(() => '(unreadable)');
+      console.log(`[Proxy] ${method} ${target.pathname} → ${upstream.status}`);
+      console.log(`[Proxy] JEG Response:`, respBody.substring(0, 1000));
+    }
 
     const responseBuffer = Buffer.from(await upstream.arrayBuffer());
     return res.send(responseBuffer);
