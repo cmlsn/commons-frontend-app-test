@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GetServerSideProps } from 'next';
 import type { GetServerSidePropsContext } from 'next';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 import {
   NavPageLayout,
   NavPageLayoutProps,
@@ -35,17 +36,23 @@ type JegSession = {
   previewMode?: boolean;
 };
 
-type GlobalNavTab = 'personal' | 'team' | 'demos';
+type GlobalNavTab = 'personal' | 'team' | 'secure';
 
-type WorkspaceJEGPageProps = NavPageLayoutProps & {
+const SecureJupyter = dynamic(() => import('./components/SecureJupyter'), {
+  ssr: false,
+});
+
+type WorkspaceSecureNotebookPageProps = NavPageLayoutProps & {
   isStaticJupyterMode?: boolean;
+  username?: string;
 };
 
-const WorkspaceJEGPage = ({
+const WorkspaceSecureNotebookPage = ({
   headerProps,
   footerProps,
   isStaticJupyterMode = false,
-}: WorkspaceJEGPageProps) => {
+  username,
+}: WorkspaceSecureNotebookPageProps) => {
   const [forceStaticJupyterMode, setForceStaticJupyterMode] = useState(false);
   const staticJupyterModeEnabled = isStaticJupyterMode || forceStaticJupyterMode;
   const [session, setSession] = useState<JegSession | null>(null);
@@ -57,6 +64,7 @@ const WorkspaceJEGPage = ({
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(true);
   const [isWorkspaceMaximized, setIsWorkspaceMaximized] = useState(false);
+  const [stashedNotebookId, setStashedNotebookId] = useState<string | null>(null);
   
   const mountPointRef = useRef<HTMLDivElement>(null);
   const staticAssetBaseUrl = (process.env.NEXT_PUBLIC_JEG_STATIC_ASSET_BASE_URL || '/jupyter').replace(/\/$/, '');
@@ -84,14 +92,66 @@ const WorkspaceJEGPage = ({
   })();
 
   const shouldRenderJupyterMountPoint = staticJupyterModeEnabled
-    ? !loading && !error
-    : !loading && !error && Boolean(session?.baseUrl) && !session?.previewMode;
+    ? !loading && !error && globalNavTab !== 'secure'
+    : !loading && !error && Boolean(session?.baseUrl) && !session?.previewMode && globalNavTab !== 'secure';
 
   const toggleZenMode = () => {
     const nextMaximized = !isWorkspaceMaximized;
     setIsWorkspaceMaximized(nextMaximized);
     setIsLeftSidebarCollapsed(nextMaximized);
     setIsRightSidebarCollapsed(nextMaximized);
+  };
+
+  const handleUpgradeToSecure = async () => {
+    try {
+      // Get the current notebook from Free tier service manager
+      const sm = (window as any)._JUPYTERLAB?.serviceManager;
+      if (!sm || sm.isDisposed) {
+        alert('Jupyter service manager not ready. Please try again.');
+        return;
+      }
+
+      // Try to get the current notebook from the notebook tracker
+      const notebookTracker = (window as any)._JUPYTERLAB?.notebookTracker;
+      if (!notebookTracker || !notebookTracker.currentWidget) {
+        alert('No active notebook found. Please open a notebook first.');
+        return;
+      }
+
+      const currentNotebook = notebookTracker.currentWidget;
+      const notebookModel = currentNotebook.model;
+      if (!notebookModel) {
+        alert('Unable to access notebook model.');
+        return;
+      }
+
+      // Get the notebook content as JSON
+      const nbJson = notebookModel.toJSON();
+
+      // Stash the notebook
+      const stashRes = await fetch('/api/workspace/stash', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ notebookJson: nbJson }),
+      });
+
+      if (!stashRes.ok) {
+        const errBody = await stashRes.json().catch(() => null);
+        throw new Error(errBody?.message || errBody?.error || 'Failed to stash notebook');
+      }
+
+      const stashBody = await stashRes.json();
+      const stashId = stashBody.stashId;
+
+      // Pass the stash ID to SecureJupyter so it can be hydrated
+      // Switch to secure tab with the stashed notebook ID
+      setStashedNotebookId(stashId);
+      setGlobalNavTab('secure');
+    } catch (err: any) {
+      console.error('[Upgrade Error]', err);
+      alert(`Upgrade failed: ${err?.message || 'Unknown error'}`);
+    }
   };
 
   useEffect(() => {
@@ -103,12 +163,12 @@ const WorkspaceJEGPage = ({
 
   useEffect(() => {
     if (isWorkspaceMaximized) {
-      document.body.classList.add('workspace-jeg-maximized');
+      document.body.classList.add('workspace-secure-notebook-maximized');
       return () => {
-        document.body.classList.remove('workspace-jeg-maximized');
+        document.body.classList.remove('workspace-secure-notebook-maximized');
       };
     }
-    document.body.classList.remove('workspace-jeg-maximized');
+    document.body.classList.remove('workspace-secure-notebook-maximized');
   }, [isWorkspaceMaximized]);
 
   useEffect(() => {
@@ -141,16 +201,13 @@ const WorkspaceJEGPage = ({
     return () => { mounted = false; };
   }, [staticJupyterModeEnabled]);
 
-  const clearExportContext = async () => {
-    try {
-      await fetch('/api/workspace/jeg/export', { method: 'DELETE', credentials: 'include' });
-      setSession((current: JegSession | null) => current ? { ...current, hasExportContext: false, exportSource: undefined, exportCohortId: undefined } : current);
-    } catch {}
-  };
-
   const handleGlobalTabChange = (tab: GlobalNavTab) => {
     setGlobalNavTab(tab);
-    setLaunchMode(tab === 'personal' ? 'personal' : 'pre-release');
+    if (tab === 'personal') {
+      setLaunchMode('personal');
+      return;
+    }
+    setLaunchMode('pre-release');
   };
 
   useEffect(() => {
@@ -348,13 +405,13 @@ const WorkspaceJEGPage = ({
       headerMetadata={{
         title: 'Workspace JupyterLab',
         content: 'Secure JupyterLab Workspace',
-        key: 'workspace-jeg-page',
+        key: 'workspace-secure-notebook-page',
       }}
     >
       <Head>
         <title>Workspace JupyterLab</title>
         <style>{`
-          body.workspace-jeg-maximized footer {
+          body.workspace-secure-notebook-maximized footer {
             display: none !important;
           }
         `}</style>
@@ -367,8 +424,6 @@ const WorkspaceJEGPage = ({
           id="jupyter-lite-main"
           rel="preload"
           href={`${staticAssetBaseUrl}/build/lab/bundle.js`}
-          // @ts-ignore - custom attribute used by JupyterLite
-          main="index"
           as="script"
         />
         <script
@@ -426,7 +481,7 @@ const WorkspaceJEGPage = ({
               <h1 className={`font-bold text-slate-800 ${isWorkspaceMaximized ? 'text-base' : 'text-lg'}`}>Gen3 Workspace</h1>
             </div>
             <nav className={`flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 ${isWorkspaceMaximized ? 'p-0.5' : 'p-1'}`}>
-              {(['personal', 'team', 'demos'] as const).map((tab) => (
+              {(['personal', 'team', 'secure'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -453,7 +508,7 @@ const WorkspaceJEGPage = ({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <SharedLibrariesPanel enabled={Boolean(session?.sharedLibraryEnabled)} launchMode={launchMode} selectedLibraryIds={selectedLibraryIds} onSelectionChange={setSelectedLibraryIds} activeScope={globalNavTab} />
+                <SharedLibrariesPanel enabled={Boolean(session?.sharedLibraryEnabled)} launchMode={launchMode} selectedLibraryIds={selectedLibraryIds} onSelectionChange={setSelectedLibraryIds} activeScope={globalNavTab === 'secure' ? 'team' : globalNavTab} />
               </div>
             </div>
           </aside>
@@ -507,9 +562,12 @@ const WorkspaceJEGPage = ({
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
                 {error && <div className="m-4 rounded border border-red-300 bg-red-50 p-6 text-sm text-red-800">{error}</div>}
-                {!error && (
+                {!error && globalNavTab === 'secure' ? (
+                  <SecureJupyter showKernelPanel={false} stashedNotebookId={stashedNotebookId} username={username} />
+                ) : null}
+                {!error && globalNavTab !== 'secure' ? (
                   <div id="jupyterlab-site" ref={mountPointRef} className="relative flex-1 w-full overflow-hidden bg-white" style={{ position: 'relative', width: '100%', height: '100%' }} />
-                )}
+                ) : null}
               </div>
             </div>
           </main>
@@ -517,7 +575,9 @@ const WorkspaceJEGPage = ({
           <aside className={`shrink-0 overflow-hidden border-l border-slate-200 bg-white transition-all duration-300 ${isRightSidebarCollapsed ? 'w-0 border-l-0 opacity-0' : 'w-[340px] opacity-100'}`}>
             <div className="flex h-full flex-col w-[340px]">
               <div className="flex items-center justify-between border-b border-slate-200 p-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Infrastructure</h2>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                  {globalNavTab === 'secure' ? 'Infrastructure' : 'Actions'}
+                </h2>
                 <button type="button" onClick={() => {
                   setIsRightSidebarCollapsed(true);
                   if (!isLeftSidebarCollapsed) setIsWorkspaceMaximized(false);
@@ -526,7 +586,28 @@ const WorkspaceJEGPage = ({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <div className="mt-4"><KernelLifecyclePanel /></div>
+                {globalNavTab === 'secure' ? (
+                  <div className="mt-4"><KernelLifecyclePanel /></div>
+                ) : (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={handleUpgradeToSecure}
+                      className="w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 transition-colors"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M3 10.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM2 15a1 1 0 100 2 1 1 0 000-2z" />
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Upgrade to Secure
+                      </div>
+                    </button>
+                    <p className="mt-3 text-xs text-slate-600">
+                      Move your notebook to the secure clean room for enhanced data protection and isolated compute.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </aside>
@@ -536,12 +617,12 @@ const WorkspaceJEGPage = ({
   );
 };
 
-export const getServerSideProps: GetServerSideProps<WorkspaceJEGPageProps> = async (context: GetServerSidePropsContext) => {
+export const getServerSideProps: GetServerSideProps<WorkspaceSecureNotebookPageProps> = async (context: GetServerSidePropsContext) => {
   const isStaticJupyterMode = isLocalJegDevelopmentModeEnabled() || process.env.JUPYTERLAB_LOCAL_DEV_MODE === 'true';
   if (isJegPreviewModeEnabled() || isLocalJegDevelopmentModeEnabled()) return { props: { ...(await getNavPageLayoutPropsFromConfig()), isStaticJupyterMode } };
   const login = await resolveWorkspaceIdentityFromCookie(context.req.headers.cookie || '');
-  if (!login.ok) return { redirect: { destination: `/Login?referer=${encodeURIComponent('/Workspace/JEG')}`, permanent: false } };
-  return { props: { ...(await getNavPageLayoutPropsFromConfig()), isStaticJupyterMode } };
+  if (!login.ok) return { redirect: { destination: `/Login?referer=${encodeURIComponent('/Workspace/SecureNotebook')}`, permanent: false } };
+  return { props: { ...(await getNavPageLayoutPropsFromConfig()), isStaticJupyterMode, username: login.identity?.userId } };
 };
 
-export default WorkspaceJEGPage;
+export default WorkspaceSecureNotebookPage;
