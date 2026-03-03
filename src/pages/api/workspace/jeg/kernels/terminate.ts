@@ -4,7 +4,7 @@ import {
   getProxyBaseUrl,
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/features/jeg-workspace/lib/jegSecurity';
+} from '@/features/jupyter-workspace/lib/jegSecurity';
 import { publishUserLibraryItem } from '@/lib/workspace/sharedLibraries';
 
 type TerminateBody = {

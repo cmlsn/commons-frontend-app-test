@@ -4,7 +4,7 @@ import {
   getProxyBaseUrl,
   isJegPreviewModeEnabled,
   resolveWorkspaceIdentityFromCookie,
-} from '@/features/jeg-workspace/lib/jegSecurity';
+} from '@/features/jupyter-workspace/lib/jegSecurity';
 
 const IDLE_WARNING_DAYS = Number(process.env.JEG_IDLE_WARNING_DAYS || '5');
 const IDLE_KILL_DAYS = Number(process.env.JEG_IDLE_KILL_DAYS || '10');

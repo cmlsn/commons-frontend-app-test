@@ -32,6 +32,8 @@ const MAX_KERNEL_AGE_DAYS = Number(
   process.env.NEXT_PUBLIC_JEG_MAX_KERNEL_AGE_DAYS || '15',
 );
 
+
+
 const KernelLifecyclePanel = () => {
   const [liveRows, setLiveRows] = useState<KernelRow[]>([]);
   const [pendingRemovals, setPendingRemovals] = useState<Record<string, PendingRemoval>>({});
@@ -312,7 +314,7 @@ const KernelLifecyclePanel = () => {
     try {
       const timestamp = Date.now();
       // Try simple notebook path first (root level)
-      let notebookPath = `notebook-${timestamp}.ipynb`;
+      const notebookPath = `notebook-${timestamp}.ipynb`;
       
       console.log('[KernelPanel] Attaching to kernel:', kernelRow.kernelId);
       console.log('[KernelPanel] Will use notebook path:', notebookPath);

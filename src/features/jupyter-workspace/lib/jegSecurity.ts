@@ -175,7 +175,8 @@ export function getProxyBaseUrl(req: NextApiRequest): string {
       .trim()
       .toLowerCase();
   const host = (req.headers['x-forwarded-host'] || req.headers.host || '') as string;
-  return `${proto}://${host}/api/workspace/jeg/proxy`;
+  // Return base URL without /proxy suffix - Datalayer appends /api/* automatically
+  return `${proto}://${host}/api/workspace/jeg`;
 }
 
 export function buildWorkspaceHeaders(identity: WorkspaceIdentity) {

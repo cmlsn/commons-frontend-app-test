@@ -10,11 +10,11 @@ import {
   getProxyBaseUrl,
   getRequireEncryptedTransport,
   resolveWorkspaceIdentityFromCookie,
-} from '@/features/jeg-workspace/lib/jegSecurity';
+} from '@/features/jupyter-workspace/lib/jegSecurity';
 import {
   fetchSharedLibrariesForUser,
   isLibraryServiceEnabled,
-} from '@/features/jeg-workspace/lib/sharedLibraries';
+} from '@/features/jupyter-workspace/lib/sharedLibraries';
 
 export default async function handler(
   req: NextApiRequest,
@@ -36,8 +36,8 @@ export default async function handler(
 
   if (previewMode) {
     return res.status(200).json({
-      baseUrl: '/api/workspace/jeg/proxy',
-      wsUrl: '/api/workspace/jeg/proxy',
+      baseUrl: '/api/workspace/jeg',
+      wsUrl: '/api/workspace/jeg',
       token: 'preview-token',
       workspaceId: 'workspace-preview-user',
       defaultPath: '/lab',
